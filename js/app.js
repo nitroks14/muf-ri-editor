@@ -752,6 +752,31 @@ if ('serviceWorker' in navigator) {
 /* =====================================================
    DÉMARRAGE
    ===================================================== */
+/* Bouton IA */
+document.getElementById('te-ia-btn').addEventListener('click', function () {
+  /* Réaffiche la vue accueil avant d'ouvrir */
+  var actionsView = document.getElementById('ia-actions-view');
+  if (actionsView) actionsView.style.display = '';
+  document.getElementById('ia-modal-spinner').style.display  = 'none';
+  document.getElementById('ia-modal-results').style.display  = 'none';
+  document.getElementById('ia-modal-actions').style.display  = 'none';
+  document.getElementById('ia-modal').classList.add('open');
+});
+
+/* =====================================================
+   API PUBLIQUE pour ia.js
+   ===================================================== */
+window._getTaxo        = function () { return taxo; };
+window._getMachineKey  = function () { return activeMachineKey; };
+window._saveTaxo       = function () { sauvegarder(); };
+window._reloadWorkspace = function () {
+  if (!activeMachineKey || !workspace) return;
+  chargementEnCours = true;
+  workspace.clear();
+  chargerMachineEnBlocs(workspace, activeMachineKey);
+  chargementEnCours = false;
+};
+
 charger().then(function() {
   chargerConfig();
   majStatutAuth(!!getToken());

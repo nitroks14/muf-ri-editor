@@ -194,6 +194,82 @@
     }
     .gh-device-link { display: block; text-align: center; font-size: var(--font-size-xs); color: var(--color-primary); margin-top: 6px; }
 
+    /* ---- Modal IA ---- */
+    .ia-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center;
+      z-index: 9997; padding: 16px;
+    }
+    .ia-modal-overlay.open { display: flex; }
+    .ia-modal {
+      background: #fff; border-radius: var(--radius);
+      width: 100%; max-width: 600px; max-height: 88vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
+    .ia-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; background: var(--color-primary); color: #fff; flex-shrink: 0;
+    }
+    .ia-modal-header h2 { font-size: var(--font-size-md); font-weight: 700; }
+    .ia-modal-close {
+      background: none; border: none; color: #fff; font-size: 1.2rem;
+      cursor: pointer; line-height: 1; padding: 2px 6px;
+    }
+    .ia-modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
+    /* Boutons actions IA */
+    .ia-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ia-action-btn {
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 4px; padding: 12px 14px;
+      background: #f8fafc; border: 1.5px solid var(--color-border);
+      border-radius: var(--radius); cursor: pointer; font-family: inherit;
+      text-align: left; transition: border-color var(--transition), background var(--transition);
+    }
+    .ia-action-btn:hover { border-color: var(--color-primary); background: #eef2f7; }
+    .ia-action-icon { font-size: 1.3rem; }
+    .ia-action-label { font-size: var(--font-size-sm); font-weight: 700; color: var(--color-primary); }
+    .ia-action-desc  { font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.3; }
+    /* Spinner */
+    .ia-spinner { display: flex; align-items: center; gap: 12px; padding: 24px 0; }
+    .ia-spinner-ring {
+      width: 28px; height: 28px; border: 3px solid #e2e8f0;
+      border-top-color: var(--color-primary); border-radius: 50%;
+      animation: spin 0.7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Résultats */
+    .ia-results { font-size: var(--font-size-sm); }
+    .ia-count { color: var(--color-text-muted); margin-bottom: 10px; font-size: var(--font-size-xs); }
+    .ia-empty { color: #10b981; font-weight: 600; padding: 12px 0; }
+    .ia-error { color: #ef4444; font-weight: 600; }
+    .ia-list  { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+    .ia-list li { line-height: 1.5; }
+    .ia-old  { color: #ef4444; text-decoration: line-through; font-style: italic; }
+    .ia-new  { color: #10b981; font-weight: 600; }
+    .ia-raison { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+    .ia-suggestions { display: flex; flex-direction: column; gap: 8px; }
+    .ia-suggestion-item { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 10px 12px; }
+    .ia-suggestion-check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: 600; }
+    .ia-suggestion-detail { font-size: var(--font-size-xs); color: var(--color-text-muted); margin-top: 4px; margin-left: 22px; }
+    .ia-suggestion-raison { font-size: var(--font-size-xs); color: #94a3b8; margin-top: 3px; margin-left: 22px; font-style: italic; }
+    .ia-list-doublons { display: flex; flex-direction: column; gap: 10px; }
+    .ia-doublon-item { border: 1px solid #fde68a; border-radius: var(--radius); padding: 10px 12px; background: #fffbeb; }
+    .ia-doublon-type { font-size: var(--font-size-xs); text-transform: uppercase; font-weight: 700; color: #92400e; }
+    .ia-doublon-item ul { padding-left: 16px; margin: 6px 0; font-size: var(--font-size-xs); }
+    /* Footer modal */
+    .ia-modal-footer {
+      display: none; justify-content: flex-end; gap: 10px;
+      padding: 12px 18px; border-top: 1px solid var(--color-border); flex-shrink: 0;
+    }
+    .ia-modal-footer.visible { display: flex; }
+    .ia-btn-reject { background: #eef2f7; color: var(--color-text); border: none; border-radius: var(--radius); padding: 8px 18px; cursor: pointer; font-size: var(--font-size-sm); font-weight: 600; font-family: inherit; }
+    .ia-btn-accept { background: #10b981; color: #fff; border: none; border-radius: var(--radius); padding: 8px 18px; cursor: pointer; font-size: var(--font-size-sm); font-weight: 600; font-family: inherit; }
+    /* Champ clé IA dans sidebar */
+    .ia-key-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+    .ia-key-label { font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 6px; display: block; }
+
     /* ---- Toast ---- */
     .te-toast {
       position: fixed; bottom: 24px; right: 24px;
@@ -241,6 +317,7 @@
 
 <div class="te-toolbar">
   <span class="te-toolbar-title">Éditeur Taxonomie RI &mdash; MUF</span>
+  <button class="te-btn te-btn-ghost"  id="te-ia-btn">🤖 IA</button>
   <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
   <button class="te-btn te-btn-json"   id="te-copy-json">Copier JSON</button>
   <button class="te-btn te-btn-import" id="te-import-json">&#8682; Importer</button>
@@ -291,9 +368,66 @@
     <input type="text" id="gh-branch" value="main" />
   </div>
   <button class="te-btn-save-config" id="gh-save-config">Sauvegarder config</button>
+
+  <div class="ia-key-section">
+    <span class="ia-key-label">🤖 Clé API Gemini</span>
+    <div class="te-field">
+      <label>Clé (AIza...)</label>
+      <input type="password" id="ia-gemini-key" placeholder="AIzaSy..." autocomplete="off" />
+      <p class="te-field-hint">Obtenez une clé sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--color-primary)">aistudio.google.com</a>. Effacée à la fermeture.</p>
+    </div>
+  </div>
 </div>
 
 <div class="te-toast" id="te-toast"></div>
+
+<!-- Modal IA -->
+<div class="ia-modal-overlay" id="ia-modal">
+  <div class="ia-modal">
+    <div class="ia-modal-header">
+      <h2 id="ia-modal-title">Assistant IA</h2>
+      <button class="ia-modal-close" id="ia-modal-close" title="Fermer">✕</button>
+    </div>
+    <div class="ia-modal-body">
+      <!-- Actions (vue accueil) -->
+      <div id="ia-actions-view">
+        <div class="ia-actions-grid">
+          <button class="ia-action-btn" id="ia-btn-ortho">
+            <span class="ia-action-icon">🔤</span>
+            <span class="ia-action-label">Correction ortho</span>
+            <span class="ia-action-desc">Corrige les fautes d'orthographe et d'accents dans tous les libellés</span>
+          </button>
+          <button class="ia-action-btn" id="ia-btn-suggestions">
+            <span class="ia-action-icon">💡</span>
+            <span class="ia-action-label">Suggestions</span>
+            <span class="ia-action-desc">Propose des éléments manquants pour la machine active</span>
+          </button>
+          <button class="ia-action-btn" id="ia-btn-doublons">
+            <span class="ia-action-icon">🔍</span>
+            <span class="ia-action-label">Doublons</span>
+            <span class="ia-action-desc">Détecte les éléments quasi-identiques entre machines</span>
+          </button>
+          <button class="ia-action-btn" id="ia-btn-normaliser">
+            <span class="ia-action-icon">✨</span>
+            <span class="ia-action-label">Normalisation</span>
+            <span class="ia-action-desc">Homogénéise casse, accents et formulation de tous les libellés</span>
+          </button>
+        </div>
+      </div>
+      <!-- Spinner -->
+      <div id="ia-modal-spinner" class="ia-spinner" style="display:none;">
+        <div class="ia-spinner-ring"></div>
+        <span style="color:var(--color-text-muted);font-size:var(--font-size-sm);">Gemini analyse la taxonomie…</span>
+      </div>
+      <!-- Résultats -->
+      <div id="ia-modal-results" class="ia-results" style="display:none;"></div>
+    </div>
+    <div class="ia-modal-footer" id="ia-modal-actions">
+      <button class="ia-btn-reject" id="ia-btn-reject">Annuler</button>
+      <button class="ia-btn-accept" id="ia-btn-accept">Appliquer</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal import JSON -->
 <div class="te-modal-overlay" id="te-import-overlay">
@@ -310,5 +444,6 @@
 
 <script src="libs/blockly.min.js"></script>
 <script src="js/app.js"></script>
+<script src="js/ia.js"></script>
 </body>
 </html>
