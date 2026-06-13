@@ -3,26 +3,259 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#1a1a2e" />
-  <title>Éditeur Rapport d'Intervention — MUF</title>
+  <meta name="theme-color" content="#003A70" />
+  <title>Éditeur Taxonomie RI — MUF</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/editor.css" />
+  <style>
+    :root {
+      --color-primary: #003A70;
+      --color-surface: #fff;
+      --color-bg: #f1f5f9;
+      --color-border: #e2e8f0;
+      --color-text: #1a2733;
+      --color-text-muted: #475569;
+      --radius: 8px;
+      --transition: 0.18s ease;
+      --font-size-xs: 0.72rem;
+      --font-size-sm: 0.82rem;
+      --font-size-md: 0.95rem;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, Roboto, system-ui, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Toolbar ---- */
+    .te-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--color-primary);
+      color: #fff;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      z-index: 20;
+    }
+    .te-toolbar-title {
+      flex: 1;
+      font-weight: 700;
+      font-size: var(--font-size-md);
+      white-space: nowrap;
+    }
+    .te-btn {
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      font-family: inherit;
+      transition: opacity var(--transition);
+    }
+    .te-btn:hover { opacity: 0.85; }
+    .te-btn-ghost   { background: rgba(255,255,255,0.15); color: #fff; }
+    .te-btn-json    { background: #f59e0b; color: #1a1a1a; }
+    .te-btn-push    { background: #10b981; color: #fff; }
+    .te-btn-import  { background: rgba(255,255,255,0.15); color: #fff; }
+    .te-btn-reset   { background: rgba(255,255,255,0.1); color: #fff; }
+    .te-btn-config  { background: rgba(255,255,255,0.1); color: #fff; }
+
+    /* ---- Onglets machines ---- */
+    .te-tabs {
+      display: flex;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #eef2f7;
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+    .te-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: #cbd5e1;
+      color: var(--color-text);
+      cursor: pointer;
+      white-space: nowrap;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      border: none;
+      font-family: inherit;
+    }
+    .te-tab.active { background: var(--color-primary); color: #fff; }
+    .te-tab-rename, .te-tab-del {
+      background: none; border: none; cursor: pointer;
+      color: inherit; opacity: 0.65; font-size: 0.85rem; line-height: 1;
+    }
+    .te-tab-rename:hover, .te-tab-del:hover { opacity: 1; }
+    .te-tab-add {
+      background: transparent;
+      border: 1.5px dashed #f59e0b;
+      color: #b45309;
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-weight: 700;
+      white-space: nowrap;
+      font-family: inherit;
+      font-size: var(--font-size-sm);
+    }
+
+    /* ---- Workspace Blockly ---- */
+    #te-workspace {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ---- Sidebar config GitHub ---- */
+    .te-sidebar {
+      position: fixed;
+      right: 0;
+      top: 54px;
+      bottom: 0;
+      width: 300px;
+      max-width: 92vw;
+      background: var(--color-surface);
+      border-left: 1px solid var(--color-border);
+      padding: 16px;
+      overflow-y: auto;
+      z-index: 15;
+      transform: translateX(100%);
+      transition: transform 0.3s;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.12);
+    }
+    .te-sidebar.open { transform: translateX(0); }
+    .te-sidebar-title { font-weight: 700; color: var(--color-primary); margin-bottom: 16px; font-size: var(--font-size-md); }
+    .te-field { margin-bottom: 12px; }
+    .te-field label { display: block; font-size: var(--font-size-xs); color: var(--color-text-muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .te-field input {
+      width: 100%; padding: 8px 10px;
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: var(--font-size-sm);
+      font-family: inherit;
+      transition: border-color var(--transition);
+    }
+    .te-field input:focus { outline: none; border-color: var(--color-primary); }
+    .te-field-hint { font-size: var(--font-size-xs); color: #94a3b8; margin-top: 4px; line-height: 1.4; }
+    .te-btn-save-config {
+      width: 100%; padding: 10px;
+      background: var(--color-primary); color: #fff;
+      border: none; border-radius: var(--radius);
+      cursor: pointer; font-size: var(--font-size-sm); font-weight: 600;
+      font-family: inherit;
+    }
+    .te-btn-save-config:hover { opacity: 0.88; }
+
+    /* ---- Toast ---- */
+    .te-toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 20px; border-radius: var(--radius); color: #fff;
+      font-size: var(--font-size-sm); font-weight: 600; font-family: inherit;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25); z-index: 9999;
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.28s; pointer-events: none;
+    }
+    .te-toast.show { transform: translateY(0); opacity: 1; }
+    .te-toast.success { background: #10b981; }
+    .te-toast.error   { background: #ef4444; }
+    .te-toast.info    { background: var(--color-primary); }
+
+    /* ---- Modal import JSON ---- */
+    .te-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center;
+      z-index: 9998; padding: 16px;
+    }
+    .te-modal-overlay.open { display: flex; }
+    .te-modal {
+      background: var(--color-surface);
+      border-radius: var(--radius);
+      padding: 22px;
+      width: 100%; max-width: 560px; max-height: 90vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .te-modal-title { font-weight: 700; color: var(--color-primary); font-size: 1rem; margin-bottom: 8px; }
+    .te-modal-help { font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.5; margin-bottom: 12px; }
+    .te-modal-textarea {
+      width: 100%; flex: 1; min-height: 220px; resize: vertical;
+      padding: 10px; border: 1.5px solid var(--color-border);
+      border-radius: var(--radius); font-family: monospace;
+      font-size: var(--font-size-xs); line-height: 1.5;
+    }
+    .te-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    .te-btn-cancel { background: #eef2f7; color: var(--color-text); }
+    .te-btn-cancel:hover { background: #cbd5e1; }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <header class="app-header">
-      <h1>Rapport d'Intervention</h1>
-      <div class="header-actions">
-        <button id="btn-save-draft" class="btn btn-secondary">Brouillon</button>
-        <button id="btn-export" class="btn btn-primary">Exporter PDF</button>
-      </div>
-    </header>
-    <main id="editor-root"></main>
+
+<div class="te-toolbar">
+  <span class="te-toolbar-title">Éditeur Taxonomie RI &mdash; MUF</span>
+  <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
+  <button class="te-btn te-btn-json"   id="te-copy-json">Copier JSON</button>
+  <button class="te-btn te-btn-import" id="te-import-json">&#8682; Importer</button>
+  <button class="te-btn te-btn-push"   id="te-push">&#8593; Push GitHub</button>
+  <button class="te-btn te-btn-config" id="te-config-btn">&#9881; Config</button>
+</div>
+
+<div class="te-tabs" id="te-tabs"></div>
+<div id="te-workspace"></div>
+
+<!-- Sidebar config GitHub -->
+<div class="te-sidebar" id="te-sidebar">
+  <div class="te-sidebar-title">Config GitHub</div>
+  <div class="te-field">
+    <label>Token GitHub (ghp_...)</label>
+    <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
+    <p class="te-field-hint">Scope requis : <strong>contents: write</strong>. Effacé à la fermeture de l'onglet.</p>
   </div>
-  <script src="js/taxonomy.js"></script>
-  <script src="js/blocks.js"></script>
-  <script src="js/editor.js"></script>
-  <script src="js/drafts.js"></script>
-  <script src="js/app.js"></script>
+  <div class="te-field">
+    <label>Owner</label>
+    <input type="text" id="gh-owner" value="nitroks14" />
+  </div>
+  <div class="te-field">
+    <label>Repo</label>
+    <input type="text" id="gh-repo" value="muf-ri-taxonomy" />
+  </div>
+  <div class="te-field">
+    <label>Branche</label>
+    <input type="text" id="gh-branch" value="main" />
+  </div>
+  <button class="te-btn-save-config" id="gh-save-config">Sauvegarder</button>
+</div>
+
+<div class="te-toast" id="te-toast"></div>
+
+<!-- Modal import JSON -->
+<div class="te-modal-overlay" id="te-import-overlay">
+  <div class="te-modal">
+    <div class="te-modal-title">Importer une taxonomie JSON</div>
+    <p class="te-modal-help">Collez un objet JSON de taxonomie complet. Cette action <strong>remplacera</strong> la taxonomie actuelle.</p>
+    <textarea id="te-import-textarea" class="te-modal-textarea" placeholder='{ "cloche": { "label": "...", "stations": [ ... ] } }' spellcheck="false"></textarea>
+    <div class="te-modal-actions">
+      <button class="te-btn te-btn-cancel" id="te-import-cancel">Annuler</button>
+      <button class="te-btn te-btn-push"   id="te-import-confirm">Importer</button>
+    </div>
+  </div>
+</div>
+
+<script src="libs/blockly.min.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

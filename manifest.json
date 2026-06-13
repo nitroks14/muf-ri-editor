@@ -1,10 +1,10 @@
 {
-  "name": "MUF — Éditeur Rapport d'Intervention",
-  "short_name": "MUF RI",
-  "start_url": "/",
+  "name": "MUF — Éditeur Taxonomie RI",
+  "short_name": "MUF Taxo RI",
+  "start_url": "/muf-ri-editor/",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#1a1a2e",
+  "background_color": "#003A70",
+  "theme_color": "#003A70",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },

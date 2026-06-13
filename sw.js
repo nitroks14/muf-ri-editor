@@ -1,5 +1,5 @@
-const CACHE = 'muf-ri-editor-v1';
-const ASSETS = ['/', '/index.html', '/css/editor.css', '/js/taxonomy.js', '/js/blocks.js', '/js/editor.js', '/js/drafts.js', '/js/app.js', '/manifest.json'];
+const CACHE = 'muf-ri-editor-v2';
+const ASSETS = ['/', '/index.html', '/js/app.js', '/manifest.json', '/libs/blockly.min.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -14,7 +14,5 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
+  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
 });
