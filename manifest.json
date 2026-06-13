@@ -1,6 +1,7 @@
 {
   "name": "MUF — Éditeur Taxonomie RI",
   "short_name": "MUF Taxo RI",
+  "scope": "/muf-ri-editor/",
   "start_url": "/muf-ri-editor/",
   "display": "standalone",
   "background_color": "#003A70",

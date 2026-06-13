@@ -1,5 +1,12 @@
-const CACHE = 'muf-ri-editor-v2';
-const ASSETS = ['/', '/index.html', '/js/app.js', '/manifest.json', '/libs/blockly.min.js'];
+const CACHE = 'muf-ri-editor-v3';
+const BASE = '/muf-ri-editor';
+const ASSETS = [
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/js/app.js',
+  BASE + '/manifest.json',
+  BASE + '/libs/blockly.min.js'
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
