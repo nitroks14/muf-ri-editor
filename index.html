@@ -412,6 +412,28 @@
             <span class="ia-action-label">Normalisation</span>
             <span class="ia-action-desc">Homogénéise casse, accents et formulation de tous les libellés</span>
           </button>
+          <button class="ia-action-btn" id="ia-btn-transfert" style="grid-column: span 2;">
+            <span class="ia-action-icon">🔀</span>
+            <span class="ia-action-label">Transférer vers une autre machine</span>
+            <span class="ia-action-desc">L'IA sélectionne les éléments d'une machine pertinents pour une autre et les adapte</span>
+          </button>
+        </div>
+
+        <!-- Sélecteur transfert (caché par défaut) -->
+        <div id="ia-transfert-picker" style="display:none; margin-top:16px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div>
+              <label class="ia-key-label">Machine source</label>
+              <select id="ia-source-machine" style="width:100%;padding:8px;border:1.5px solid var(--color-border);border-radius:var(--radius);font-family:inherit;font-size:var(--font-size-sm);"></select>
+            </div>
+            <div>
+              <label class="ia-key-label">Machine cible</label>
+              <select id="ia-target-machine" style="width:100%;padding:8px;border:1.5px solid var(--color-border);border-radius:var(--radius);font-family:inherit;font-size:var(--font-size-sm);"></select>
+            </div>
+          </div>
+          <button id="ia-btn-transfert-run" style="width:100%;padding:9px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:var(--font-size-sm);font-weight:600;font-family:inherit;">
+            Analyser avec Gemini →
+          </button>
         </div>
       </div>
       <!-- Spinner -->

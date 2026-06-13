@@ -97,6 +97,8 @@ function openModal(title) {
   modalResults.style.display = 'none';
   modalActions.classList.remove('visible');
   _pendingApply = null;
+  var actionsView = document.getElementById('ia-actions-view');
+  if (actionsView) actionsView.style.display = 'none';
   modal.classList.add('open');
 }
 
@@ -112,6 +114,12 @@ function showResults(html, onAccept) {
 function closeModal() {
   modal.classList.remove('open');
   _pendingApply = null;
+  var actionsView = document.getElementById('ia-actions-view');
+  if (actionsView) actionsView.style.display = '';
+  var picker = document.getElementById('ia-transfert-picker');
+  var grid   = document.querySelector('.ia-actions-grid');
+  if (picker) picker.style.display = 'none';
+  if (grid)   grid.style.display = '';
 }
 
 document.getElementById('ia-modal-close').addEventListener('click', closeModal);
@@ -314,6 +322,131 @@ document.getElementById('ia-btn-normaliser').addEventListener('click', async fun
       window._saveTaxo();
       window._reloadWorkspace();
       showToastIA('Normalisation appliquée (' + normas.length + ' libellés)', 'success');
+    });
+  } catch (e) {
+    showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
+  }
+});
+
+/* =====================================================
+   5. TRANSFERT INTER-MACHINES
+   ===================================================== */
+var transfertPicker = document.getElementById('ia-transfert-picker');
+var sourceSelect    = document.getElementById('ia-source-machine');
+var targetSelect    = document.getElementById('ia-target-machine');
+var iaActionsGrid   = document.querySelector('.ia-actions-grid');
+
+document.getElementById('ia-btn-transfert').addEventListener('click', function () {
+  var taxo = window._getTaxo();
+  var machineKeys = Object.keys(taxo).filter(function (k) {
+    return ['version', 'actionLabels', '_etats', '_etatsDefauts'].indexOf(k) === -1;
+  });
+
+  if (machineKeys.length < 2) {
+    openModal('Transfert inter-machines');
+    showResults('<p class="ia-error">Il faut au moins 2 machines dans la taxonomie pour utiliser cette fonction.</p>', null);
+    return;
+  }
+
+  sourceSelect.innerHTML = machineKeys.map(function (k) {
+    return '<option value="' + esc(k) + '">' + esc(taxo[k].label || k) + '</option>';
+  }).join('');
+  targetSelect.innerHTML = machineKeys.map(function (k) {
+    return '<option value="' + esc(k) + '">' + esc(taxo[k].label || k) + '</option>';
+  }).join('');
+  if (machineKeys.length >= 2) targetSelect.value = machineKeys[1];
+
+  if (iaActionsGrid) iaActionsGrid.style.display = 'none';
+  transfertPicker.style.display = 'block';
+});
+
+document.getElementById('ia-btn-transfert-run').addEventListener('click', async function () {
+  var taxo = window._getTaxo();
+  var srcKey = sourceSelect.value;
+  var tgtKey = targetSelect.value;
+
+  if (!srcKey || !tgtKey) {
+    alert('Sélectionnez une machine source et une machine cible.');
+    return;
+  }
+  if (srcKey === tgtKey) {
+    alert('La machine source et la machine cible doivent être différentes.');
+    return;
+  }
+
+  var srcMachine = taxo[srcKey];
+  var tgtMachine = taxo[tgtKey];
+
+  transfertPicker.style.display = 'none';
+  if (iaActionsGrid) iaActionsGrid.style.display = '';
+
+  openModal('Transfert : ' + (srcMachine.label || srcKey) + ' → ' + (tgtMachine.label || tgtKey));
+
+  try {
+    var prompt = 'Tu es un expert en maintenance industrielle de machines d\'emballage alimentaire.\n' +
+      'Machine SOURCE ("' + (srcMachine.label || srcKey) + '") :\n' +
+      JSON.stringify(srcMachine, null, 2) + '\n\n' +
+      'Machine CIBLE ("' + (tgtMachine.label || tgtKey) + '") :\n' +
+      JSON.stringify(tgtMachine, null, 2) + '\n\n' +
+      'Identifie les éléments de maintenance de la machine SOURCE qui seraient pertinents pour la machine CIBLE ' +
+      '(même type d\'action, même composant ou composant équivalent). ' +
+      'Ne propose que les éléments vraiment transférables (ignoré s\'ils existent déjà dans la cible). ' +
+      'Adapte les libellés si nécessaire pour correspondre à la nomenclature de la machine cible.\n\n' +
+      'Retourne un JSON :\n' +
+      '{"transferts": [{"station": "nom station cible", "subcat": "nom sous-cat cible", ' +
+      '"element": "libellé élément adapté", "actions": [{"type": "type action", "note": "note optionnelle"}], ' +
+      '"raison": "pourquoi cet élément est pertinent pour la cible"}]}';
+
+    var result = await callGemini(prompt);
+    var transferts = result.transferts || [];
+
+    if (!transferts.length) {
+      showResults('<p class="ia-empty">✅ Aucun élément transférable identifié entre ces deux machines.</p>', null);
+      return;
+    }
+
+    var html = '<p class="ia-count">' + transferts.length + ' élément(s) transférable(s) de <strong>' +
+      esc(srcMachine.label || srcKey) + '</strong> vers <strong>' + esc(tgtMachine.label || tgtKey) + '</strong> :</p>' +
+      '<div class="ia-suggestions">' +
+      transferts.map(function (t, i) {
+        var actionsStr = (t.actions || []).map(function (a) { return a.type + (a.note ? ' (' + a.note + ')' : ''); }).join(', ');
+        return '<div class="ia-suggestion-item" data-idx="' + i + '">' +
+          '<label class="ia-suggestion-check"><input type="checkbox" class="ia-chk-tr" data-idx="' + i + '" checked /> ' +
+          '<strong>' + esc(t.station) + '</strong> › ' + esc(t.subcat) + ' › ' + esc(t.element) + '</label>' +
+          (actionsStr ? '<div class="ia-suggestion-detail">Actions : ' + esc(actionsStr) + '</div>' : '') +
+          '<div class="ia-suggestion-raison">' + esc(t.raison) + '</div></div>';
+      }).join('') + '</div>';
+
+    showResults(html, function () {
+      var checked = modalResults.querySelectorAll('.ia-chk-tr:checked');
+      var added = 0;
+      checked.forEach(function (chk) {
+        var idx = parseInt(chk.dataset.idx, 10);
+        var t = transferts[idx];
+        var m = taxo[tgtKey];
+        if (!m.stations) m.stations = [];
+        var station = m.stations.find(function (st) { return st.label === t.station; });
+        if (!station) { station = { label: t.station, subcats: [] }; m.stations.push(station); }
+        if (!station.subcats) station.subcats = [];
+        var subcat = station.subcats.find(function (sc) { return sc.label === t.subcat; });
+        if (!subcat) { subcat = { label: t.subcat, elements: [] }; station.subcats.push(subcat); }
+        if (!subcat.elements) subcat.elements = [];
+        var exists = subcat.elements.some(function (e) { return e.label === t.element; });
+        if (!exists) {
+          subcat.elements.push({
+            label: t.element,
+            actions: (t.actions || []).map(function (a) {
+              var act = { type: a.type };
+              if (a.note) act.note = a.note;
+              return act;
+            })
+          });
+          added++;
+        }
+      });
+      window._saveTaxo();
+      window._reloadWorkspace();
+      showToastIA(added + ' élément(s) transféré(s) vers ' + (tgtMachine.label || tgtKey), 'success');
     });
   } catch (e) {
     showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
