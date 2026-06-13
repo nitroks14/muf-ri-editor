@@ -121,10 +121,110 @@ async function charger() {
 }
 
 /* =====================================================
-   CONFIG GITHUB
+   AUTH GITHUB — DEVICE FLOW (sans token manuel)
+   ===================================================== */
+var GH_CLIENT_ID = '178c6fc778ccc68e1d6a'; /* client_id public gh CLI */
+var _pollTimer = null;
+
+function getToken() { return sessionStorage.getItem(SS_GH_TOKEN) || ''; }
+
+function setToken(token) {
+  sessionStorage.setItem(SS_GH_TOKEN, token);
+  majStatutAuth(true);
+}
+
+function clearToken() {
+  sessionStorage.removeItem(SS_GH_TOKEN);
+  majStatutAuth(false);
+}
+
+function majStatutAuth(connecte) {
+  var statusEl = document.getElementById('gh-auth-status');
+  var labelEl  = document.getElementById('gh-auth-label');
+  var btnLogin  = document.getElementById('gh-btn-login');
+  var btnLogout = document.getElementById('gh-btn-logout');
+
+  if (connecte) {
+    statusEl.className = 'gh-auth-status connected';
+    labelEl.textContent = 'Connecté à GitHub ✓';
+    btnLogin.style.display  = 'none';
+    btnLogout.style.display = 'block';
+    document.getElementById('gh-device-box').classList.remove('open');
+  } else {
+    statusEl.className = 'gh-auth-status disconnected';
+    labelEl.textContent = 'Non connecté';
+    btnLogin.style.display  = 'block';
+    btnLogout.style.display = 'none';
+  }
+}
+
+async function lancerDeviceFlow() {
+  var statusEl = document.getElementById('gh-auth-status');
+  var labelEl  = document.getElementById('gh-auth-label');
+  statusEl.className = 'gh-auth-status pending';
+  labelEl.textContent = 'Demande du code…';
+
+  try {
+    var resp = await fetch('https://github.com/login/device/code', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'client_id=' + GH_CLIENT_ID + '&scope=repo'
+    });
+    var data = await resp.json();
+
+    document.getElementById('gh-device-code').textContent = data.user_code;
+    document.getElementById('gh-device-link').href = data.verification_uri || 'https://github.com/login/device';
+    document.getElementById('gh-device-box').classList.add('open');
+    labelEl.textContent = 'En attente d\'autorisation…';
+
+    /* Polling toutes les data.interval secondes */
+    var interval = (data.interval || 5) * 1000;
+    var deviceCode = data.device_code;
+
+    clearTimeout(_pollTimer);
+    (function poll() {
+      _pollTimer = setTimeout(async function() {
+        try {
+          var pResp = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'client_id=' + GH_CLIENT_ID + '&device_code=' + deviceCode +
+                  '&grant_type=urn:ietf:params:oauth:grant-type:device_code'
+          });
+          var pData = await pResp.json();
+          if (pData.access_token) {
+            setToken(pData.access_token);
+            showToast('Connecté à GitHub ✓', 'success');
+          } else if (pData.error === 'authorization_pending') {
+            poll(); /* continuer */
+          } else if (pData.error === 'slow_down') {
+            interval += 5000; poll();
+          } else {
+            majStatutAuth(false);
+            showToast('Erreur : ' + (pData.error_description || pData.error), 'error');
+          }
+        } catch(e) { majStatutAuth(false); showToast('Erreur réseau', 'error'); }
+      }, interval);
+    })();
+
+  } catch(e) {
+    majStatutAuth(false);
+    showToast('Impossible de contacter GitHub', 'error');
+  }
+}
+
+document.getElementById('gh-btn-login').addEventListener('click', lancerDeviceFlow);
+
+document.getElementById('gh-btn-logout').addEventListener('click', function() {
+  clearTimeout(_pollTimer);
+  clearToken();
+  showToast('Déconnecté', 'info');
+});
+
+/* =====================================================
+   CONFIG GITHUB (owner / repo / branch)
    ===================================================== */
 function chargerConfig() {
-  document.getElementById('gh-token').value  = sessionStorage.getItem(SS_GH_TOKEN) || '';
   var saved = localStorage.getItem(LS_GH);
   if (!saved) return;
   var cfg;
@@ -136,7 +236,7 @@ function chargerConfig() {
 
 function lireConfig() {
   return {
-    token:  document.getElementById('gh-token').value.trim(),
+    token:  getToken(),
     owner:  document.getElementById('gh-owner').value.trim(),
     repo:   document.getElementById('gh-repo').value.trim(),
     branch: document.getElementById('gh-branch').value.trim() || 'main'
@@ -145,8 +245,6 @@ function lireConfig() {
 
 document.getElementById('gh-save-config').addEventListener('click', function() {
   var cfg = lireConfig();
-  if (cfg.token) sessionStorage.setItem(SS_GH_TOKEN, cfg.token);
-  else sessionStorage.removeItem(SS_GH_TOKEN);
   localStorage.setItem(LS_GH, JSON.stringify({ owner: cfg.owner, repo: cfg.repo, branch: cfg.branch }));
   showToast('Config sauvegardée', 'success');
   document.getElementById('te-sidebar').classList.remove('open');
@@ -210,7 +308,7 @@ async function gererPush() {
 
   try {
     var cfg = lireConfig();
-    if (!cfg.token) { showToast('Token GitHub manquant (⚙ Config)', 'error'); return; }
+    if (!cfg.token) { showToast('Non connecté à GitHub — cliquez sur ⚙ Config', 'error'); return; }
 
     var apiBase = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/';
     var headers = {
@@ -656,6 +754,7 @@ if ('serviceWorker' in navigator) {
    ===================================================== */
 charger().then(function() {
   chargerConfig();
+  majStatutAuth(!!getToken());
   if (window.Blockly) {
     initBlockly();
   } else {

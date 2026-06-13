@@ -160,6 +160,40 @@
     }
     .te-btn-save-config:hover { opacity: 0.88; }
 
+    /* ---- Auth GitHub ---- */
+    .gh-auth-status {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-radius: var(--radius);
+      font-size: var(--font-size-sm); font-weight: 600; margin-bottom: 12px;
+    }
+    .gh-auth-status.connected    { background: #d1fae5; color: #065f46; }
+    .gh-auth-status.disconnected { background: #fee2e2; color: #991b1b; }
+    .gh-auth-status.pending      { background: #fef3c7; color: #92400e; }
+    .gh-auth-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .connected .gh-auth-dot    { background: #10b981; }
+    .disconnected .gh-auth-dot { background: #ef4444; }
+    .pending .gh-auth-dot      { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .gh-btn-auth {
+      width: 100%; padding: 10px; border: none; border-radius: var(--radius);
+      cursor: pointer; font-size: var(--font-size-sm); font-weight: 600;
+      font-family: inherit; transition: opacity var(--transition);
+    }
+    .gh-btn-auth:hover { opacity: 0.85; }
+    .gh-btn-login    { background: #24292f; color: #fff; }
+    .gh-btn-logout   { background: #eef2f7; color: var(--color-text); }
+    .gh-device-box {
+      background: #f8fafc; border: 1.5px solid var(--color-border);
+      border-radius: var(--radius); padding: 14px; margin-top: 12px; display: none;
+    }
+    .gh-device-box.open { display: block; }
+    .gh-device-code {
+      font-family: monospace; font-size: 1.4rem; font-weight: 700;
+      color: var(--color-primary); letter-spacing: 0.1em;
+      text-align: center; padding: 8px 0;
+    }
+    .gh-device-link { display: block; text-align: center; font-size: var(--font-size-xs); color: var(--color-primary); margin-top: 6px; }
+
     /* ---- Toast ---- */
     .te-toast {
       position: fixed; bottom: 24px; right: 24px;
@@ -220,11 +254,30 @@
 <!-- Sidebar config GitHub -->
 <div class="te-sidebar" id="te-sidebar">
   <div class="te-sidebar-title">Config GitHub</div>
-  <div class="te-field">
-    <label>Token GitHub (ghp_...)</label>
-    <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
-    <p class="te-field-hint">Scope requis : <strong>contents: write</strong>. Effacé à la fermeture de l'onglet.</p>
+
+  <!-- Statut authentification -->
+  <div class="gh-auth-status disconnected" id="gh-auth-status">
+    <span class="gh-auth-dot"></span>
+    <span id="gh-auth-label">Non connecté</span>
   </div>
+
+  <!-- Bouton login / logout -->
+  <button class="gh-btn-auth gh-btn-login" id="gh-btn-login">🔑 Se connecter à GitHub</button>
+  <button class="gh-btn-auth gh-btn-logout" id="gh-btn-logout" style="display:none;margin-top:8px;">Déconnecter</button>
+
+  <!-- Zone code device flow -->
+  <div class="gh-device-box" id="gh-device-box">
+    <p style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-bottom:6px;">
+      Ouvrez le lien ci-dessous et entrez ce code :
+    </p>
+    <div class="gh-device-code" id="gh-device-code">——</div>
+    <a class="gh-device-link" id="gh-device-link" href="https://github.com/login/device" target="_blank" rel="noopener">
+      github.com/login/device ↗
+    </a>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;" />
+
   <div class="te-field">
     <label>Owner</label>
     <input type="text" id="gh-owner" value="nitroks14" />
@@ -237,7 +290,7 @@
     <label>Branche</label>
     <input type="text" id="gh-branch" value="main" />
   </div>
-  <button class="te-btn-save-config" id="gh-save-config">Sauvegarder</button>
+  <button class="te-btn-save-config" id="gh-save-config">Sauvegarder config</button>
 </div>
 
 <div class="te-toast" id="te-toast"></div>
