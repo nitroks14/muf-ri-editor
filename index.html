@@ -332,25 +332,15 @@
 <div class="te-sidebar" id="te-sidebar">
   <div class="te-sidebar-title">Config GitHub</div>
 
-  <!-- Statut authentification -->
-  <div class="gh-auth-status disconnected" id="gh-auth-status">
-    <span class="gh-auth-dot"></span>
-    <span id="gh-auth-label">Non connecté</span>
+  <!-- Token GitHub (PAT) -->
+  <div class="te-field">
+    <label>Token GitHub (PAT)</label>
+    <input type="password" id="gh-token-input" placeholder="ghp_..." autocomplete="off" />
+    <p class="te-field-hint">Générez un token sur <a href="https://github.com/settings/tokens/new?scopes=repo&description=muf-ri-editor" target="_blank" rel="noopener" style="color:var(--color-primary)">github.com/settings/tokens</a> avec le scope <strong>repo</strong>. Effacé à la fermeture.</p>
   </div>
-
-  <!-- Bouton login / logout -->
-  <button class="gh-btn-auth gh-btn-login" id="gh-btn-login">🔑 Se connecter à GitHub</button>
-  <button class="gh-btn-auth gh-btn-logout" id="gh-btn-logout" style="display:none;margin-top:8px;">Déconnecter</button>
-
-  <!-- Zone code device flow -->
-  <div class="gh-device-box" id="gh-device-box">
-    <p style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-bottom:6px;">
-      Ouvrez le lien ci-dessous et entrez ce code :
-    </p>
-    <div class="gh-device-code" id="gh-device-code">——</div>
-    <a class="gh-device-link" id="gh-device-link" href="https://github.com/login/device" target="_blank" rel="noopener">
-      github.com/login/device ↗
-    </a>
+  <div class="gh-auth-status disconnected" id="gh-auth-status" style="margin-top:8px;">
+    <span class="gh-auth-dot"></span>
+    <span id="gh-auth-label">Aucun token</span>
   </div>
 
   <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;" />
@@ -369,6 +359,7 @@
   </div>
   <button class="te-btn-save-config" id="gh-save-config">Sauvegarder config</button>
 
+  <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;" />
   <div class="ia-key-section">
     <span class="ia-key-label">🤖 Clé API Gemini</span>
     <div class="te-field">
