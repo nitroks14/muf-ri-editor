@@ -699,6 +699,229 @@ function extraireStations(ws) {
 }
 
 /* =====================================================
+   SYNC ENTRE APPAREILS — export / import chiffré par PIN
+   -----------------------------------------------------
+   Permet de transférer les accès (PAT GitHub + clé Gemini + config
+   owner/repo/branch) d'un appareil à l'autre sans backend ni re-saisie.
+   La sortie est une chaîne texte copiable (AirDrop/Notes/mail).
+
+   Schéma cryptographique (Web Crypto SubtleCrypto, aucune lib externe) :
+     - Dérivation de clé : PBKDF2(PIN, sel, 150000 itérations, SHA-256)
+       → clé AES-GCM 256 bits.
+     - Chiffrement : AES-GCM avec IV aléatoire de 12 octets ; le tag
+       d'authentification est inclus par l'API (intégrité vérifiée au
+       déchiffrement → un PIN faux échoue proprement).
+     - Sel aléatoire de 16 octets (crypto.getRandomValues).
+
+   Format de la chaîne exportée :
+     "MUFRI1." + base64url( sel[16] || iv[12] || ciphertext )
+     - Préfixe de version "MUFRI1." pour détecter un format inconnu.
+     - base64url : variante URL-safe ('+'→'-', '/'→'_', sans '='),
+       robuste au copier/coller (pas de retour à la ligne, mail-safe).
+     - Le payload clair (avant chiffrement) est un JSON :
+         { v:1, token?:<PAT>, gemini?:<cléGemini>, gh?:{owner,repo,branch} }
+       Les secrets absents sont omis. Aucun secret n'apparaît en clair
+       dans la chaîne finale.
+   ===================================================== */
+var SYNC_PREFIX = 'MUFRI1.';
+var SYNC_PBKDF2_ITER = 150000;
+
+/* Uint8Array → base64url (URL-safe, sans padding). */
+function bytesToB64url(bytes) {
+  var bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/* base64url → Uint8Array. */
+function b64urlToBytes(b64) {
+  var s = String(b64 || '').replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  while (s.length % 4) s += '=';
+  var bin = atob(s);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/* Dérive une clé AES-GCM 256 bits à partir du PIN et d'un sel. */
+async function deriverCleSync(pin, sel) {
+  var baseKey = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(pin), { name: 'PBKDF2' }, false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: sel, iterations: SYNC_PBKDF2_ITER, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/* Chiffre le payload (objet) avec le PIN → chaîne "MUFRI1.<base64url>". */
+async function chiffrerSync(payload, pin) {
+  var sel = crypto.getRandomValues(new Uint8Array(16));
+  var iv  = crypto.getRandomValues(new Uint8Array(12));
+  var cle = await deriverCleSync(pin, sel);
+  var clair = new TextEncoder().encode(JSON.stringify(payload));
+  var chiffreBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cle, clair);
+  var chiffre = new Uint8Array(chiffreBuf);
+  var concat = new Uint8Array(sel.length + iv.length + chiffre.length);
+  concat.set(sel, 0);
+  concat.set(iv, sel.length);
+  concat.set(chiffre, sel.length + iv.length);
+  return SYNC_PREFIX + bytesToB64url(concat);
+}
+
+/* Déchiffre une chaîne "MUFRI1.<base64url>" avec le PIN → objet payload.
+   Lève une erreur si préfixe inconnu, chaîne malformée ou PIN incorrect. */
+async function dechiffrerSync(chaine, pin) {
+  var s = String(chaine || '').trim();
+  if (s.indexOf(SYNC_PREFIX) !== 0) throw new Error('Préfixe inconnu');
+  var concat = b64urlToBytes(s.slice(SYNC_PREFIX.length));
+  if (concat.length < 16 + 12 + 1) throw new Error('Chaîne malformée');
+  var sel = concat.slice(0, 16);
+  var iv  = concat.slice(16, 28);
+  var chiffre = concat.slice(28);
+  var cle = await deriverCleSync(pin, sel);
+  var clairBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, cle, chiffre);
+  return JSON.parse(new TextDecoder().decode(clairBuf));
+}
+
+/* ---- UI Export ---- */
+var syncExportOverlay  = document.getElementById('sync-export-overlay');
+var syncExportPin      = document.getElementById('sync-export-pin');
+var syncExportField    = document.getElementById('sync-export-result-field');
+var syncExportTextarea = document.getElementById('sync-export-textarea');
+var syncExportConfirm  = document.getElementById('sync-export-confirm');
+var syncExportCopy     = document.getElementById('sync-export-copy');
+
+function resetSyncExport() {
+  syncExportPin.value = '';
+  syncExportTextarea.value = '';
+  syncExportField.style.display = 'none';
+  syncExportCopy.style.display = 'none';
+  syncExportConfirm.style.display = '';
+}
+
+document.getElementById('sync-export-btn').addEventListener('click', function () {
+  resetSyncExport();
+  syncExportOverlay.classList.add('open');
+  setTimeout(function () { syncExportPin.focus(); }, 50);
+});
+document.getElementById('sync-export-cancel').addEventListener('click', function () {
+  syncExportOverlay.classList.remove('open');
+});
+syncExportOverlay.addEventListener('click', function (e) {
+  if (e.target === syncExportOverlay) syncExportOverlay.classList.remove('open');
+});
+
+syncExportConfirm.addEventListener('click', async function () {
+  var pin = (syncExportPin.value || '').trim();
+  if (!pin) { showToast('Saisissez un PIN', 'error'); return; }
+
+  /* Construire le payload, en omettant proprement les secrets absents. */
+  var payload = { v: 1 };
+  var tok = getToken();
+  if (tok) payload.token = tok;
+  var gemini = (window.IA && window.IA.getKey) ? window.IA.getKey() : '';
+  if (gemini) payload.gemini = gemini;
+  var cfg = lireConfig();
+  if (cfg.owner || cfg.repo || cfg.branch) {
+    payload.gh = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch };
+  }
+  if (!payload.token && !payload.gemini) {
+    showToast('Aucun accès à exporter', 'error');
+    return;
+  }
+
+  try {
+    var chaine = await chiffrerSync(payload, pin);
+    syncExportTextarea.value = chaine;
+    syncExportField.style.display = '';
+    syncExportCopy.style.display = '';
+    syncExportConfirm.style.display = 'none';
+    showToast('Accès chiffrés ✓', 'success');
+    setTimeout(function () { syncExportTextarea.focus(); syncExportTextarea.select(); }, 50);
+  } catch (err) {
+    console.error('[MUF-RI-Editor] Export error:', err);
+    showToast('Échec du chiffrement', 'error');
+  }
+});
+
+syncExportCopy.addEventListener('click', function () {
+  navigator.clipboard.writeText(syncExportTextarea.value).then(function () {
+    showToast('Chaîne copiée', 'success');
+  }).catch(function () {
+    syncExportTextarea.select();
+    showToast('Copiez manuellement la sélection', 'info');
+  });
+});
+
+/* ---- UI Import ---- */
+var syncImportOverlay  = document.getElementById('sync-import-overlay');
+var syncImportTextarea = document.getElementById('sync-import-textarea');
+var syncImportPin      = document.getElementById('sync-import-pin');
+
+document.getElementById('sync-import-btn').addEventListener('click', function () {
+  syncImportTextarea.value = '';
+  syncImportPin.value = '';
+  syncImportOverlay.classList.add('open');
+  setTimeout(function () { syncImportTextarea.focus(); }, 50);
+});
+document.getElementById('sync-import-cancel').addEventListener('click', function () {
+  syncImportOverlay.classList.remove('open');
+});
+syncImportOverlay.addEventListener('click', function (e) {
+  if (e.target === syncImportOverlay) syncImportOverlay.classList.remove('open');
+});
+
+document.getElementById('sync-import-confirm').addEventListener('click', async function () {
+  var chaine = (syncImportTextarea.value || '').trim();
+  var pin    = (syncImportPin.value || '').trim();
+  if (!chaine || !pin) { showToast('Chaîne et PIN requis', 'error'); return; }
+
+  var payload;
+  try {
+    payload = await dechiffrerSync(chaine, pin);
+  } catch (err) {
+    showToast('PIN incorrect ou données invalides', 'error');
+    return;
+  }
+  if (!payload || typeof payload !== 'object') {
+    showToast('PIN incorrect ou données invalides', 'error');
+    return;
+  }
+
+  /* Appliquer le PAT GitHub. */
+  if (payload.token) {
+    localStorage.setItem(LS_GH_TOKEN, payload.token);
+    if (tokenInput) tokenInput.value = payload.token;
+  }
+  /* Appliquer la clé Gemini via l'API exposée par ia.js. */
+  if (payload.gemini && window.IA && window.IA.setKey) {
+    window.IA.setKey(payload.gemini);
+  }
+  /* Appliquer la config GitHub si présente. */
+  if (payload.gh && typeof payload.gh === 'object') {
+    var gh = payload.gh;
+    if (gh.owner)  document.getElementById('gh-owner').value  = gh.owner;
+    if (gh.repo)   document.getElementById('gh-repo').value   = gh.repo;
+    if (gh.branch) document.getElementById('gh-branch').value = gh.branch;
+    localStorage.setItem(LS_GH, JSON.stringify({
+      owner: document.getElementById('gh-owner').value.trim(),
+      repo: document.getElementById('gh-repo').value.trim(),
+      branch: document.getElementById('gh-branch').value.trim() || 'main'
+    }));
+  }
+
+  /* Rafraîchir les statuts UI. */
+  majStatutAuth();
+
+  syncImportOverlay.classList.remove('open');
+  showToast('Accès importés ✓', 'success');
+});
+
+/* =====================================================
    SERVICE WORKER
    ===================================================== */
 if ('serviceWorker' in navigator) {

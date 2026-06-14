@@ -490,6 +490,24 @@ if (keyForget) {
 }
 
 /* =====================================================
+   API PUBLIQUE — accès à la clé Gemini (sync entre appareils)
+   La clé Gemini est encapsulée ici (GEMINI_LS_KEY). On expose des
+   accesseurs propres pour qu'app.js puisse l'inclure dans l'export
+   chiffré et la restaurer à l'import sans dupliquer la constante.
+   ===================================================== */
+window.IA = window.IA || {};
+window.IA.getKey = function () { return getApiKey(); };
+window.IA.setKey = function (val) {
+  val = (val || '').trim();
+  if (val) {
+    localStorage.setItem(GEMINI_LS_KEY, val);
+  } else {
+    localStorage.removeItem(GEMINI_LS_KEY);
+  }
+  if (keyInput) keyInput.value = val;
+};
+
+/* =====================================================
    UTILITAIRES
    ===================================================== */
 function esc(str) {

@@ -378,6 +378,18 @@
       <button type="button" class="te-btn-forget" id="ia-gemini-forget">Oublier la clé</button>
     </div>
   </div>
+
+  <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;" />
+  <div class="ia-key-section">
+    <span class="ia-key-label">🔁 Synchroniser entre appareils</span>
+    <p class="te-field-hint" style="margin-top:0;margin-bottom:10px;">
+      Transférez vos accès (token GitHub, clé Gemini, config) vers un autre appareil
+      sans re-saisie. La chaîne exportée est chiffrée par un PIN&nbsp;: copiez-la
+      (AirDrop, Notes, mail…) puis importez-la sur l'autre appareil avec le même PIN.
+    </p>
+    <button type="button" class="te-btn-forget" id="sync-export-btn" style="margin-top:0;">Exporter mes accès</button>
+    <button type="button" class="te-btn-forget" id="sync-import-btn" style="margin-top:6px;">Importer mes accès</button>
+  </div>
 </div>
 
 <div class="te-toast" id="te-toast"></div>
@@ -461,6 +473,54 @@
     <div class="te-modal-actions">
       <button class="te-btn te-btn-cancel" id="te-import-cancel">Annuler</button>
       <button class="te-btn te-btn-push"   id="te-import-confirm">Importer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal export chiffré des accès -->
+<div class="te-modal-overlay" id="sync-export-overlay">
+  <div class="te-modal">
+    <div class="te-modal-title">🔁 Exporter mes accès</div>
+    <p class="te-modal-help">
+      Choisissez un <strong>PIN</strong> (code ou phrase). Il chiffre vos accès et sera
+      redemandé à l'import sur l'autre appareil. Conservez-le&nbsp;: il est impossible de
+      le récupérer.
+    </p>
+    <div class="te-field">
+      <label>PIN / passphrase</label>
+      <input type="password" id="sync-export-pin" placeholder="ex. 1234 ou une phrase" autocomplete="off" />
+    </div>
+    <div class="te-field" id="sync-export-result-field" style="display:none;">
+      <label>Chaîne chiffrée à transférer</label>
+      <textarea id="sync-export-textarea" class="te-modal-textarea" readonly spellcheck="false" style="min-height:120px;"></textarea>
+    </div>
+    <div class="te-modal-actions">
+      <button class="te-btn te-btn-cancel" id="sync-export-cancel">Fermer</button>
+      <button class="te-btn te-btn-push"   id="sync-export-copy" style="display:none;">Copier</button>
+      <button class="te-btn te-btn-push"   id="sync-export-confirm">Chiffrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal import chiffré des accès -->
+<div class="te-modal-overlay" id="sync-import-overlay">
+  <div class="te-modal">
+    <div class="te-modal-title">🔁 Importer mes accès</div>
+    <p class="te-modal-help">
+      Collez la chaîne exportée depuis l'autre appareil et saisissez le <strong>PIN</strong>
+      utilisé lors de l'export.
+    </p>
+    <div class="te-field">
+      <label>Chaîne chiffrée</label>
+      <textarea id="sync-import-textarea" class="te-modal-textarea" placeholder="MUFRI1...." spellcheck="false" style="min-height:120px;"></textarea>
+    </div>
+    <div class="te-field">
+      <label>PIN / passphrase</label>
+      <input type="password" id="sync-import-pin" placeholder="le PIN choisi à l'export" autocomplete="off" />
+    </div>
+    <div class="te-modal-actions">
+      <button class="te-btn te-btn-cancel" id="sync-import-cancel">Annuler</button>
+      <button class="te-btn te-btn-push"   id="sync-import-confirm">Importer</button>
     </div>
   </div>
 </div>
