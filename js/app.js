@@ -15,7 +15,7 @@ var VERSION_FILE    = 'version.json';
    ===================================================== */
 var LS_KEY        = 'muf_ri_taxo_draft';
 var LS_GH         = 'muf_ri_taxo_github';
-var SS_GH_TOKEN   = 'muf_ri_taxo_token';
+var LS_GH_TOKEN   = 'muf_ri_taxo_token';
 
 var taxo = null;
 var workspace = null;
@@ -123,9 +123,22 @@ async function charger() {
 /* =====================================================
    AUTH GITHUB — PAT (Personal Access Token)
    ===================================================== */
-var tokenInput = document.getElementById('gh-token-input');
+var tokenInput  = document.getElementById('gh-token-input');
+var tokenForget = document.getElementById('gh-token-forget');
 
-function getToken() { return sessionStorage.getItem(SS_GH_TOKEN) || ''; }
+/* Le PAT est conserve en localStorage (persiste entre les sessions) : poste
+   personnel, persistance demandee par l'utilisateur. Migration douce depuis
+   l'ancien stockage sessionStorage si une valeur y subsiste. */
+(function migrerTokenDepuisSession() {
+  if (localStorage.getItem(LS_GH_TOKEN)) return;
+  var legacy = sessionStorage.getItem(LS_GH_TOKEN);
+  if (legacy) {
+    localStorage.setItem(LS_GH_TOKEN, legacy);
+    sessionStorage.removeItem(LS_GH_TOKEN);
+  }
+})();
+
+function getToken() { return localStorage.getItem(LS_GH_TOKEN) || ''; }
 
 function majStatutAuth() {
   var tok = getToken();
@@ -145,11 +158,20 @@ if (tokenInput) {
   tokenInput.addEventListener('input', function () {
     var val = tokenInput.value.trim();
     if (val) {
-      sessionStorage.setItem(SS_GH_TOKEN, val);
+      localStorage.setItem(LS_GH_TOKEN, val);
     } else {
-      sessionStorage.removeItem(SS_GH_TOKEN);
+      localStorage.removeItem(LS_GH_TOKEN);
     }
     majStatutAuth();
+  });
+}
+
+if (tokenForget) {
+  tokenForget.addEventListener('click', function () {
+    localStorage.removeItem(LS_GH_TOKEN);
+    if (tokenInput) tokenInput.value = '';
+    majStatutAuth();
+    showToast('Token GitHub oublié', 'info');
   });
 }
 

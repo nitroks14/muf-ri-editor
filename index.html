@@ -159,6 +159,14 @@
       font-family: inherit;
     }
     .te-btn-save-config:hover { opacity: 0.88; }
+    .te-btn-forget {
+      margin-top: 6px; padding: 6px 10px;
+      background: #eef2f7; color: var(--color-text);
+      border: 1.5px solid var(--color-border); border-radius: var(--radius);
+      cursor: pointer; font-size: var(--font-size-xs); font-weight: 600;
+      font-family: inherit;
+    }
+    .te-btn-forget:hover { background: #cbd5e1; }
 
     /* ---- Auth GitHub ---- */
     .gh-auth-status {
@@ -336,7 +344,8 @@
   <div class="te-field">
     <label>Token GitHub (PAT)</label>
     <input type="password" id="gh-token-input" placeholder="ghp_..." autocomplete="off" />
-    <p class="te-field-hint">Générez un token sur <a href="https://github.com/settings/tokens/new?scopes=repo&description=muf-ri-editor" target="_blank" rel="noopener" style="color:var(--color-primary)">github.com/settings/tokens</a> avec le scope <strong>repo</strong>. Effacé à la fermeture.</p>
+    <p class="te-field-hint">Générez un token sur <a href="https://github.com/settings/tokens/new?scopes=repo&description=muf-ri-editor" target="_blank" rel="noopener" style="color:var(--color-primary)">github.com/settings/tokens</a> avec le scope <strong>repo</strong>. Conservé sur cet appareil. Utilisez « Oublier » pour l'effacer.</p>
+    <button type="button" class="te-btn-forget" id="gh-token-forget">Oublier le token</button>
   </div>
   <div class="gh-auth-status disconnected" id="gh-auth-status" style="margin-top:8px;">
     <span class="gh-auth-dot"></span>
@@ -365,7 +374,8 @@
     <div class="te-field">
       <label>Clé (AIza...)</label>
       <input type="password" id="ia-gemini-key" placeholder="AIzaSy..." autocomplete="off" />
-      <p class="te-field-hint">Obtenez une clé sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--color-primary)">aistudio.google.com</a>. Effacée à la fermeture.</p>
+      <p class="te-field-hint">Obtenez une clé sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--color-primary)">aistudio.google.com</a>. Conservée sur cet appareil. Utilisez « Oublier » pour l'effacer.</p>
+      <button type="button" class="te-btn-forget" id="ia-gemini-forget">Oublier la clé</button>
     </div>
   </div>
 </div>

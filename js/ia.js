@@ -5,9 +5,21 @@
    GEMINI API
    ===================================================== */
 var GEMINI_MODEL   = 'gemini-2.0-flash';
-var GEMINI_SS_KEY  = 'muf_ri_gemini_key';
+var GEMINI_LS_KEY  = 'muf_ri_gemini_key';
 
-function getApiKey() { return sessionStorage.getItem(GEMINI_SS_KEY) || ''; }
+/* La cle Gemini est conservee en localStorage (persiste entre les sessions) :
+   poste personnel, persistance demandee par l'utilisateur. Migration douce
+   depuis l'ancien stockage sessionStorage si une valeur y subsiste. */
+(function migrerCleDepuisSession() {
+  if (localStorage.getItem(GEMINI_LS_KEY)) return;
+  var legacy = sessionStorage.getItem(GEMINI_LS_KEY);
+  if (legacy) {
+    localStorage.setItem(GEMINI_LS_KEY, legacy);
+    sessionStorage.removeItem(GEMINI_LS_KEY);
+  }
+})();
+
+function getApiKey() { return localStorage.getItem(GEMINI_LS_KEY) || ''; }
 
 async function callGemini(prompt) {
   var key = getApiKey();
@@ -456,11 +468,24 @@ document.getElementById('ia-btn-transfert-run').addEventListener('click', async 
 /* =====================================================
    CONFIG CLÉ GEMINI
    ===================================================== */
-var keyInput = document.getElementById('ia-gemini-key');
+var keyInput  = document.getElementById('ia-gemini-key');
+var keyForget = document.getElementById('ia-gemini-forget');
 if (keyInput) {
   keyInput.value = getApiKey();
   keyInput.addEventListener('input', function () {
-    sessionStorage.setItem(GEMINI_SS_KEY, keyInput.value.trim());
+    var val = keyInput.value.trim();
+    if (val) {
+      localStorage.setItem(GEMINI_LS_KEY, val);
+    } else {
+      localStorage.removeItem(GEMINI_LS_KEY);
+    }
+  });
+}
+if (keyForget) {
+  keyForget.addEventListener('click', function () {
+    localStorage.removeItem(GEMINI_LS_KEY);
+    if (keyInput) keyInput.value = '';
+    showToastIA('Clé Gemini oubliée', 'info');
   });
 }
 
