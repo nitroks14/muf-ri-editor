@@ -333,14 +333,8 @@ if (btnPush && !btnPush.dataset.bound) {
 }
 
 /* =====================================================
-   TOOLBAR — Copier JSON, Reset
+   TOOLBAR — Reset
    ===================================================== */
-document.getElementById('te-copy-json').addEventListener('click', function() {
-  navigator.clipboard.writeText(JSON.stringify(taxo, null, 2)).then(function() {
-    showToast('JSON copié', 'success');
-  });
-});
-
 document.getElementById('te-reset').addEventListener('click', function() {
   if (!confirm('Réinitialiser depuis GitHub ? Les modifications non poussées seront perdues.')) return;
   localStorage.removeItem(LS_KEY);
@@ -416,39 +410,60 @@ document.getElementById('te-lock').addEventListener('click', function() {
 majBoutonVerrou();
 
 /* =====================================================
-   IMPORT JSON
-   ===================================================== */
-var importOverlay = document.getElementById('te-import-overlay');
-var importTextarea = document.getElementById('te-import-textarea');
+   PALETTE DE BLOCS (flyout) REPLIABLE
+   -----------------------------------------------------
+   Le toolbox est un flyoutToolbox : une colonne de blocs toujours rendue a
+   gauche du workspace, qui recouvre le bord gauche de la taxonomie. On la rend
+   repliable pour que la taxonomie occupe toute la largeur en consultation.
 
-document.getElementById('te-import-json').addEventListener('click', function() {
-  importTextarea.value = '';
-  importOverlay.classList.add('open');
-  setTimeout(function() { importTextarea.focus(); }, 50);
+   Methode (Blockly v10) : le flyout d'un flyoutToolbox s'obtient via
+   workspace.getFlyout(). flyout.setVisible(bool) masque/affiche le flyout et
+   recalcule les metriques ; on enchaine Blockly.svgResize(workspace) pour que
+   le workspace recupere l'espace libere (ou cede la place) immediatement.
+
+   Etat persiste en localStorage (muf_ri_palette_visible), defaut = REPLIEE.
+   applique au demarrage (initBlockly), survit a switchMachine et au re-render
+   IA (_reloadWorkspace) car appliquerPalette() relit toujours le localStorage
+   et re-cible le flyout courant du workspace.
+   ===================================================== */
+var LS_PALETTE = 'muf_ri_palette_visible';
+
+function paletteVisible() {
+  return localStorage.getItem(LS_PALETTE) === '1'; // defaut repliee si absent
+}
+
+function appliquerPalette() {
+  if (!workspace) return;
+  var flyout = workspace.getFlyout ? workspace.getFlyout() : null;
+  if (!flyout) return;
+  var visible = paletteVisible();
+  flyout.setVisible(visible);
+  /* Reflow : le workspace doit reprendre / ceder l'espace du flyout. */
+  if (window.Blockly && Blockly.svgResize) Blockly.svgResize(workspace);
+}
+
+function majBoutonPalette() {
+  var btn = document.getElementById('te-palette');
+  if (!btn) return;
+  if (paletteVisible()) {
+    btn.classList.add('is-open');
+    btn.innerHTML = '◀ Palette';
+    btn.title = 'La palette de blocs est ouverte. Cliquer pour la replier.';
+  } else {
+    btn.classList.remove('is-open');
+    btn.innerHTML = '▶ Palette';
+    btn.title = 'Afficher la palette de blocs (Station / Sous-catégorie / Élément / Action).';
+  }
+}
+
+document.getElementById('te-palette').addEventListener('click', function() {
+  var nouvelEtat = !paletteVisible();
+  localStorage.setItem(LS_PALETTE, nouvelEtat ? '1' : '0');
+  appliquerPalette();
+  majBoutonPalette();
 });
-document.getElementById('te-import-cancel').addEventListener('click', function() {
-  importOverlay.classList.remove('open');
-});
-importOverlay.addEventListener('click', function(e) {
-  if (e.target === importOverlay) importOverlay.classList.remove('open');
-});
-document.getElementById('te-import-confirm').addEventListener('click', function() {
-  var brut = (importTextarea.value || '').trim();
-  if (!brut) { showToast('Aucun contenu', 'error'); return; }
-  var result;
-  try { result = JSON.parse(brut); } catch(e) { showToast('JSON invalide : ' + e.message, 'error'); return; }
-  /* Support format enveloppé {machines:{...}} ou plat */
-  if (result.machines) result = result.machines;
-  var machines = Object.keys(result).filter(function(k) { return !estCleReservee(k); });
-  if (!machines.length) { showToast('Aucune machine trouvée', 'error'); return; }
-  taxo = migrerSiNecessaire(result);
-  sauvegarder();
-  activeMachineKey = null;
-  renderTabs();
-  switchMachine(machineKeys()[0]);
-  importOverlay.classList.remove('open');
-  showToast('Taxonomie importée', 'success');
-});
+
+majBoutonPalette();
 
 /* =====================================================
    BLOCKLY — DÉFINITIONS DES BLOCS
@@ -564,6 +579,7 @@ function initBlockly() {
   workspace = Blockly.inject('te-workspace', cfg);
 
   appliquerVerrou();
+  appliquerPalette();
 
   renderTabs();
   if (machineKeys().length) switchMachine(machineKeys()[0]);
@@ -650,6 +666,7 @@ function switchMachine(key) {
   chargementEnCours = false;
   renderTabs();
   appliquerVerrou();
+  appliquerPalette();
 }
 
 function ajouterMachine() {
@@ -1033,6 +1050,7 @@ window._reloadWorkspace = function () {
   chargerMachineEnBlocs(workspace, activeMachineKey);
   chargementEnCours = false;
   appliquerVerrou();
+  appliquerPalette();
 };
 
 charger().then(function() {

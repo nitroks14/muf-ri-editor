@@ -63,13 +63,13 @@
     }
     .te-btn:hover { opacity: 0.85; }
     .te-btn-ghost   { background: rgba(255,255,255,0.15); color: #fff; }
-    .te-btn-json    { background: #f59e0b; color: #1a1a1a; }
     .te-btn-push    { background: #10b981; color: #fff; }
-    .te-btn-import  { background: rgba(255,255,255,0.15); color: #fff; }
     .te-btn-reset   { background: rgba(255,255,255,0.1); color: #fff; }
     .te-btn-config  { background: rgba(255,255,255,0.1); color: #fff; }
 .te-btn-lock    { background: rgba(255,255,255,0.15); color: #fff; }
 .te-btn-lock.is-unlocked { background: #6366f1; color: #fff; }
+.te-btn-palette { background: rgba(255,255,255,0.15); color: #fff; }
+.te-btn-palette.is-open { background: #6366f1; color: #fff; }
 
     /* ---- Onglets machines ---- */
     .te-tabs {
@@ -328,10 +328,9 @@
 <div class="te-toolbar">
   <span class="te-toolbar-title">Éditeur Taxonomie RI &mdash; MUF</span>
   <button class="te-btn te-btn-ghost"  id="te-ia-btn">🤖 IA</button>
+  <button class="te-btn te-btn-palette" id="te-palette">&#9654; Palette</button>
   <button class="te-btn te-btn-lock"   id="te-lock">&#128274; Blocs verrouillés</button>
   <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
-  <button class="te-btn te-btn-json"   id="te-copy-json">Copier JSON</button>
-  <button class="te-btn te-btn-import" id="te-import-json">&#8682; Importer</button>
   <button class="te-btn te-btn-push"   id="te-push">&#8593; Push GitHub</button>
   <button class="te-btn te-btn-config" id="te-config-btn">&#9881; Config</button>
 </div>
@@ -463,19 +462,6 @@
     <div class="ia-modal-footer" id="ia-modal-actions">
       <button class="ia-btn-reject" id="ia-btn-reject">Annuler</button>
       <button class="ia-btn-accept" id="ia-btn-accept">Appliquer</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal import JSON -->
-<div class="te-modal-overlay" id="te-import-overlay">
-  <div class="te-modal">
-    <div class="te-modal-title">Importer une taxonomie JSON</div>
-    <p class="te-modal-help">Collez un objet JSON de taxonomie complet. Cette action <strong>remplacera</strong> la taxonomie actuelle.</p>
-    <textarea id="te-import-textarea" class="te-modal-textarea" placeholder='{ "cloche": { "label": "...", "stations": [ ... ] } }' spellcheck="false"></textarea>
-    <div class="te-modal-actions">
-      <button class="te-btn te-btn-cancel" id="te-import-cancel">Annuler</button>
-      <button class="te-btn te-btn-push"   id="te-import-confirm">Importer</button>
     </div>
   </div>
 </div>
