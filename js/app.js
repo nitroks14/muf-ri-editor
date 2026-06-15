@@ -354,6 +354,68 @@ document.getElementById('te-reset').addEventListener('click', function() {
 });
 
 /* =====================================================
+   VERROU DE DEPLACEMENT DES BLOCS (ergonomie tactile)
+   -----------------------------------------------------
+   Defaut : VERROUILLE. Persiste en localStorage (muf_ri_lock_blocs).
+   Verrouille  -> les blocs existants ne peuvent plus etre DEPLACES
+                  (block.setMovable(false)). L'edition des champs
+                  (LABEL/NOTE/ETATS/menu ACTION_TYPE) et le repli/depli
+                  restent fonctionnels (setMovable n'affecte que le drag).
+   Deverrouille -> blocs deplacables/reorganisables normalement.
+
+   Ajout / reorganisation : pour ajouter un bloc depuis la toolbox ou
+   reorganiser l'arborescence, l'utilisateur DEVERROUILLE (un clic). C'est
+   l'integration la plus simple et la plus previsible au tactile : pas de
+   "fenetre" ambigue ou un bloc serait a moitie figé. Le verrou se reapplique
+   a tous les blocs au prochain switchMachine / rechargement (ia.js) et au
+   clic sur le bouton, donc l'etat est toujours coherent.
+   ===================================================== */
+var LS_LOCK = 'muf_ri_lock_blocs';
+
+function estVerrouille() {
+  var v = localStorage.getItem(LS_LOCK);
+  return v === null ? true : v === '1'; // defaut verrouille si absent
+}
+
+function appliquerVerrou() {
+  if (!workspace) return;
+  var locked = estVerrouille();
+  var blocks = workspace.getAllBlocks(false);
+  for (var i = 0; i < blocks.length; i++) {
+    blocks[i].setMovable(!locked);
+  }
+}
+
+function majBoutonVerrou() {
+  var btn = document.getElementById('te-lock');
+  if (!btn) return;
+  if (estVerrouille()) {
+    btn.classList.remove('is-unlocked');
+    btn.innerHTML = '🔒 Blocs verrouillés';
+    btn.title = 'Les blocs ne peuvent pas être déplacés (édition des champs OK). Cliquer pour déverrouiller.';
+  } else {
+    btn.classList.add('is-unlocked');
+    btn.innerHTML = '🔓 Blocs libres';
+    btn.title = 'Les blocs sont déplaçables / réorganisables. Cliquer pour verrouiller.';
+  }
+}
+
+document.getElementById('te-lock').addEventListener('click', function() {
+  var nouvelEtat = !estVerrouille();
+  localStorage.setItem(LS_LOCK, nouvelEtat ? '1' : '0');
+  appliquerVerrou();
+  majBoutonVerrou();
+  showToast(
+    nouvelEtat
+      ? '🔒 Blocs verrouillés — déplacement bloqué (édition des champs OK)'
+      : '🔓 Blocs libres — déplacement et ajout possibles',
+    'info'
+  );
+});
+
+majBoutonVerrou();
+
+/* =====================================================
    IMPORT JSON
    ===================================================== */
 var importOverlay = document.getElementById('te-import-overlay');
@@ -481,12 +543,27 @@ function initBlockly() {
     ? Blockly.Themes.Zelos
     : (Blockly.Themes && Blockly.Themes.Classic ? Blockly.Themes.Classic : undefined);
 
+  /* Ergonomie tactile (iPad) : Blockly demarre un glisser des ~5 px de mouvement
+     (Blockly.config.dragRadius, defaut 5). Au doigt, le moindre frolement/scroll
+     depasse ce seuil et deplace les blocs par accident. On releve le seuil a 22 px :
+     un glisser volontaire (le doigt parcourt une vraie distance) fonctionne toujours,
+     mais un tap/scroll/frolement ne deplace plus rien.
+     flyoutDragRadius (defaut 10) gere le glisser depuis la toolbox -> releve a 22 aussi
+     pour la coherence. Ces valeurs sont lues "en direct" par Blockly, mais on les pose
+     avant l'injection par securite. */
+  if (Blockly.config) {
+    Blockly.config.dragRadius = 22;
+    Blockly.config.flyoutDragRadius = 22;
+  }
+
   var cfg = { toolbox: toolbox, scrollbars: true, trashcan: true, collapse: true,
     move: { scrollbars: true, drag: true, wheel: true },
     zoom: { controls: true, wheel: true, startScale: 0.9 } };
   if (theme) cfg.theme = theme;
 
   workspace = Blockly.inject('te-workspace', cfg);
+
+  appliquerVerrou();
 
   renderTabs();
   if (machineKeys().length) switchMachine(machineKeys()[0]);
@@ -572,6 +649,7 @@ function switchMachine(key) {
   chargerMachineEnBlocs(workspace, key);
   chargementEnCours = false;
   renderTabs();
+  appliquerVerrou();
 }
 
 function ajouterMachine() {
@@ -954,6 +1032,7 @@ window._reloadWorkspace = function () {
   workspace.clear();
   chargerMachineEnBlocs(workspace, activeMachineKey);
   chargementEnCours = false;
+  appliquerVerrou();
 };
 
 charger().then(function() {

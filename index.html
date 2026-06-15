@@ -68,6 +68,8 @@
     .te-btn-import  { background: rgba(255,255,255,0.15); color: #fff; }
     .te-btn-reset   { background: rgba(255,255,255,0.1); color: #fff; }
     .te-btn-config  { background: rgba(255,255,255,0.1); color: #fff; }
+.te-btn-lock    { background: rgba(255,255,255,0.15); color: #fff; }
+.te-btn-lock.is-unlocked { background: #6366f1; color: #fff; }
 
     /* ---- Onglets machines ---- */
     .te-tabs {
@@ -326,6 +328,7 @@
 <div class="te-toolbar">
   <span class="te-toolbar-title">Éditeur Taxonomie RI &mdash; MUF</span>
   <button class="te-btn te-btn-ghost"  id="te-ia-btn">🤖 IA</button>
+  <button class="te-btn te-btn-lock"   id="te-lock">&#128274; Blocs verrouillés</button>
   <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
   <button class="te-btn te-btn-json"   id="te-copy-json">Copier JSON</button>
   <button class="te-btn te-btn-import" id="te-import-json">&#8682; Importer</button>
