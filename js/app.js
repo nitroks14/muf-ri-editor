@@ -286,7 +286,7 @@ async function gererPush() {
 
     /* 2. Construire le nouveau JSON avec les machines + les métadonnées */
     var newVersion = bumperVersion(ancienneVersion);
-    var newTaxonomy = { version: newVersion, actionLabels: { controle: 'Contrôle', nettoyage: 'Nettoyage', remplacement: 'Remplacement', graissage: 'Graissage', lubrification: 'Lubrification', reglage: 'Réglage' }, machines: taxo };
+    var newTaxonomy = { version: newVersion, actionLabels: { controle: 'Contrôle', nettoyage: 'Nettoyage', remplacement: 'Remplacement', graissage: 'Graissage', lubrification: 'Lubrification', reglage: 'Réglage', mesure: 'Mesure' }, machines: taxo };
     var newContent = JSON.stringify(newTaxonomy, null, 2);
 
     /* 3. PUT taxonomy.json */
@@ -498,20 +498,28 @@ var blockDefs = [
   },
   {
     type: 'taxo_action',
-    message0: '%1 note %2 états (/) %3',
+    message0: '%1 note %2 états (/) %3 unité %4',
     args0: [
       { type: 'field_dropdown', name: 'ACTION_TYPE', options: [
         ['✓ Contrôle','controle'], ['🧹 Nettoyage','nettoyage'],
         ['🔄 Remplacement','remplacement'], ['🟡 Graissage','graissage'],
-        ['💧 Lubrification','lubrification'], ['⚙ Réglage','reglage']
+        ['💧 Lubrification','lubrification'], ['⚙ Réglage','reglage'],
+        ['📏 Mesure','mesure']
       ]},
       { type: 'field_input', name: 'NOTE', text: '' },
-      { type: 'field_input', name: 'ETATS', text: '' }
+      { type: 'field_input', name: 'ETATS', text: '' },
+      /* UNITE_OPTIONS : liste prédéfinie d'unités, éditable ici (doit rester
+         alignée avec la liste côté plugin RI). N'est exportée que pour les
+         actions de type 'mesure' ; option vide '—' = aucune unité. */
+      { type: 'field_dropdown', name: 'UNITE', options: [
+        ['—',''], ['mbar','mbar'], ['mbar/min','mbar/min'], ['bar','bar'],
+        ['%','%'], ['s','s'], ['min','min'], ['°C','°C'], ['mm','mm'], ['µm','µm']
+      ]}
     ],
     inputsInline: true,
     previousStatement: 'ACTION', nextStatement: 'ACTION',
     colour: 65,
-    tooltip: "Action. note = précision libre ; états (/) = liste Bon/Moyen/Dégradé → menu déroulant dans le rapport."
+    tooltip: "Action. note = précision libre ; états (/) = liste Bon/Moyen/Dégradé → menu déroulant dans le rapport. unité = pour le type Mesure (saisie d'une valeur numérique dans le rapport)."
   }
 ];
 
@@ -727,6 +735,7 @@ function chargerMachineEnBlocs(ws, key) {
           aB.setFieldValue(aType, 'ACTION_TYPE');
           if (aNote)  aB.setFieldValue(aNote,  'NOTE');
           if (aEtats) aB.setFieldValue(aEtats, 'ETATS');
+          if (typeof action === 'object' && action.unite) aB.setFieldValue(action.unite, 'UNITE');
           aB.initSvg(); aB.render();
           var aConn = !prevA ? eB.getInput('ACTIONS').connection : prevA.nextConnection;
           if (aConn && aB.previousConnection) aConn.connect(aB.previousConnection);
@@ -769,7 +778,14 @@ function extraireStations(ws) {
                           var note = (aB.getFieldValue('NOTE') || '').trim();
                           var etats = (aB.getFieldValue('ETATS') || '').trim();
                           if (note)  obj.note  = note;
-                          if (etats) obj.etats = etats;
+                          if (obj.type === 'mesure') {
+                            /* Mesure : pas d'états (la saisie est une valeur,
+                               pas une liste). On exporte l'unité si choisie. */
+                            var unite = (aB.getFieldValue('UNITE') || '').trim();
+                            if (unite) obj.unite = unite;
+                          } else if (etats) {
+                            obj.etats = etats;
+                          }
                           actions.push(obj);
                         }
                         aB = aB.nextConnection && aB.nextConnection.targetBlock();

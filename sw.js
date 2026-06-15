@@ -1,4 +1,4 @@
-const CACHE = 'muf-ri-editor-v8';
+const CACHE = 'muf-ri-editor-v9';
 const BASE = '/muf-ri-editor';
 const ASSETS = [
   BASE + '/',
