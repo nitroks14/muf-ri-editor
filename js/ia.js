@@ -72,28 +72,10 @@ async function callGemini(prompt) {
 /* =====================================================
    HELPERS TAXONOMIE
    ===================================================== */
-function extractAllTexts(taxo) {
-  var list = [];
-  Object.keys(taxo).forEach(function (mk) {
-    var m = taxo[mk];
-    if (m.label) list.push({ path: mk + '.label', value: m.label });
-    (m.stations || []).forEach(function (s, si) {
-      if (s.label) list.push({ path: mk + '.stations[' + si + '].label', value: s.label });
-      (s.subcats || []).forEach(function (sc, sci) {
-        if (sc.label) list.push({ path: mk + '.stations[' + si + '].subcats[' + sci + '].label', value: sc.label });
-        (sc.elements || []).forEach(function (e, ei) {
-          if (e.label) list.push({ path: mk + '.stations[' + si + '].subcats[' + sci + '].elements[' + ei + '].label', value: e.label });
-          (e.actions || []).forEach(function (a, ai) {
-            if (a.note) list.push({ path: mk + '.stations[' + si + '].subcats[' + sci + '].elements[' + ei + '].actions[' + ai + '].note', value: a.note });
-          });
-        });
-      });
-    });
-  });
-  return list;
-}
-
-function applyTextReplacements(taxo, map) {
+/* Applique les remplacements de texte UNIQUEMENT à l'intérieur de l'objet
+   `node` fourni (ex. la machine active). Évite qu'un libellé identique présent dans
+   une autre machine soit modifié par erreur. */
+function applyTextReplacementsInNode(node, map) {
   function walk(obj) {
     if (typeof obj === 'string') return map[obj] !== undefined ? map[obj] : obj;
     if (Array.isArray(obj)) { for (var i = 0; i < obj.length; i++) obj[i] = walk(obj[i]); return obj; }
@@ -103,8 +85,24 @@ function applyTextReplacements(taxo, map) {
     }
     return obj;
   }
-  Object.keys(taxo).forEach(function (mk) { taxo[mk] = walk(taxo[mk]); });
-  return taxo;
+  return walk(node);
+}
+
+/* Extrait les libellés/notes d'UNE seule machine (objet machine), pas de toute la taxo. */
+function extractMachineTexts(machine) {
+  var list = [];
+  if (machine.label) list.push(machine.label);
+  (machine.stations || []).forEach(function (s) {
+    if (s.label) list.push(s.label);
+    (s.subcats || []).forEach(function (sc) {
+      if (sc.label) list.push(sc.label);
+      (sc.elements || []).forEach(function (e) {
+        if (e.label) list.push(e.label);
+        (e.actions || []).forEach(function (a) { if (a.note) list.push(a.note); });
+      });
+    });
+  });
+  return list;
 }
 
 /* =====================================================
@@ -141,6 +139,25 @@ function showResults(html, onAccept) {
   _pendingApply = onAccept || null;
 }
 
+/* Bouton « Tout cocher / Tout décocher » : HTML à insérer en tête d'une liste à cases.
+   `selector` cible les cases concernées dans #ia-modal-results. */
+function toggleAllButtonHtml() {
+  return '<button type="button" class="ia-toggle-all" data-toggle-all>Tout décocher</button>';
+}
+
+/* Câble le(s) bouton(s) « tout cocher/décocher » présents dans la zone de résultats.
+   Bascule toutes les cases `selector` selon leur état majoritaire courant. */
+function wireToggleAll(selector) {
+  modalResults.querySelectorAll('[data-toggle-all]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var boxes = modalResults.querySelectorAll(selector);
+      var anyUnchecked = Array.prototype.some.call(boxes, function (b) { return !b.checked; });
+      boxes.forEach(function (b) { b.checked = anyUnchecked; });
+      btn.textContent = anyUnchecked ? 'Tout décocher' : 'Tout cocher';
+    });
+  });
+}
+
 function closeModal() {
   modal.classList.remove('open');
   _pendingApply = null;
@@ -168,8 +185,13 @@ document.getElementById('ia-btn-ortho').addEventListener('click', async function
   openModal('Correction orthographique');
   try {
     var taxo = window._getTaxo();
-    var texts = extractAllTexts(taxo);
-    var uniques = Array.from(new Set(texts.map(function (t) { return t.value; }))).filter(Boolean);
+    var machineKey = window._getMachineKey();
+    if (!machineKey || !taxo[machineKey]) {
+      showResults('<p class="ia-error">Aucune machine active sélectionnée.</p>', null);
+      return;
+    }
+    var machine = taxo[machineKey];
+    var uniques = Array.from(new Set(extractMachineTexts(machine))).filter(Boolean);
 
     var prompt = 'Tu es un expert en français technique industriel (maintenance de machines d\'emballage alimentaire).\n' +
       'Voici une liste de libellés et notes issus d\'une taxonomie de maintenance. ' +
@@ -184,23 +206,33 @@ document.getElementById('ia-btn-ortho').addEventListener('click', async function
     var corrections = (result.corrections || []).filter(function (c) { return c.original !== c.corrected; });
 
     if (!corrections.length) {
-      showResults('<p class="ia-empty">✅ Aucune faute détectée — la taxonomie est correcte.</p>', null);
+      showResults('<p class="ia-empty">✅ Aucune faute détectée pour cette machine.</p>', null);
       return;
     }
 
-    var html = '<p class="ia-count">' + corrections.length + ' correction(s) proposée(s) :</p><ul class="ia-list">' +
-      corrections.map(function (c) {
-        return '<li><span class="ia-old">' + esc(c.original) + '</span> → <span class="ia-new">' + esc(c.corrected) + '</span></li>';
+    var html = '<p class="ia-count">' + corrections.length + ' correction(s) proposée(s) pour <strong>' + esc(machine.label) + '</strong> :</p>' +
+      toggleAllButtonHtml() +
+      '<ul class="ia-list ia-checklist">' +
+      corrections.map(function (c, i) {
+        return '<li class="ia-check-item"><input type="checkbox" class="ia-chk-ortho" data-idx="' + i + '" checked /> ' +
+          '<span><span class="ia-old">' + esc(c.original) + '</span> → <span class="ia-new">' + esc(c.corrected) + '</span></span></li>';
       }).join('') + '</ul>';
 
     showResults(html, function () {
       var map = {};
-      corrections.forEach(function (c) { map[c.original] = c.corrected; });
-      applyTextReplacements(taxo, map);
+      var checked = modalResults.querySelectorAll('.ia-chk-ortho:checked');
+      checked.forEach(function (chk) {
+        var c = corrections[parseInt(chk.dataset.idx, 10)];
+        map[c.original] = c.corrected;
+      });
+      var n = Object.keys(map).length;
+      if (!n) { showToastIA('Aucune correction cochée', 'info'); return; }
+      applyTextReplacementsInNode(taxo[machineKey], map);
       window._saveTaxo();
       window._reloadWorkspace();
-      showToastIA('Corrections appliquées (' + corrections.length + ')', 'success');
+      showToastIA('Corrections appliquées (' + n + ')', 'success');
     });
+    wireToggleAll('.ia-chk-ortho');
   } catch (e) {
     showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
   }
@@ -237,6 +269,7 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
     }
 
     var html = '<p class="ia-count">' + suggestions.length + ' suggestion(s) pour <strong>' + esc(machine.label) + '</strong> :</p>' +
+      toggleAllButtonHtml() +
       '<div class="ia-suggestions">' +
       suggestions.map(function (s, i) {
         return '<div class="ia-suggestion-item" data-idx="' + i + '">' +
@@ -267,6 +300,7 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
       window._reloadWorkspace();
       showToastIA(added + ' élément(s) ajouté(s)', 'success');
     });
+    wireToggleAll('.ia-chk');
   } catch (e) {
     showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
   }
@@ -317,8 +351,13 @@ document.getElementById('ia-btn-normaliser').addEventListener('click', async fun
   openModal('Normalisation des libellés');
   try {
     var taxo = window._getTaxo();
-    var texts = extractAllTexts(taxo);
-    var uniques = Array.from(new Set(texts.map(function (t) { return t.value; }))).filter(Boolean);
+    var machineKey = window._getMachineKey();
+    if (!machineKey || !taxo[machineKey]) {
+      showResults('<p class="ia-error">Aucune machine active sélectionnée.</p>', null);
+      return;
+    }
+    var machine = taxo[machineKey];
+    var uniques = Array.from(new Set(extractMachineTexts(machine))).filter(Boolean);
 
     var prompt = 'Tu es un expert en terminologie de maintenance industrielle française.\n' +
       'Normalise ces libellés selon ces règles :\n' +
@@ -335,24 +374,34 @@ document.getElementById('ia-btn-normaliser').addEventListener('click', async fun
     var normas = (result.normalisations || []).filter(function (n) { return n.original !== n.normalise; });
 
     if (!normas.length) {
-      showResults('<p class="ia-empty">✅ Tous les libellés sont déjà normalisés.</p>', null);
+      showResults('<p class="ia-empty">✅ Tous les libellés de cette machine sont déjà normalisés.</p>', null);
       return;
     }
 
-    var html = '<p class="ia-count">' + normas.length + ' normalisation(s) proposée(s) :</p><ul class="ia-list">' +
-      normas.map(function (n) {
-        return '<li><span class="ia-old">' + esc(n.original) + '</span> → <span class="ia-new">' + esc(n.normalise) + '</span>' +
-          (n.raison ? '<span class="ia-raison"> — ' + esc(n.raison) + '</span>' : '') + '</li>';
+    var html = '<p class="ia-count">' + normas.length + ' normalisation(s) proposée(s) pour <strong>' + esc(machine.label) + '</strong> :</p>' +
+      toggleAllButtonHtml() +
+      '<ul class="ia-list ia-checklist">' +
+      normas.map(function (n, i) {
+        return '<li class="ia-check-item"><input type="checkbox" class="ia-chk-norm" data-idx="' + i + '" checked /> ' +
+          '<span><span class="ia-old">' + esc(n.original) + '</span> → <span class="ia-new">' + esc(n.normalise) + '</span>' +
+          (n.raison ? '<span class="ia-raison"> — ' + esc(n.raison) + '</span>' : '') + '</span></li>';
       }).join('') + '</ul>';
 
     showResults(html, function () {
       var map = {};
-      normas.forEach(function (n) { map[n.original] = n.normalise; });
-      applyTextReplacements(taxo, map);
+      var checked = modalResults.querySelectorAll('.ia-chk-norm:checked');
+      checked.forEach(function (chk) {
+        var n = normas[parseInt(chk.dataset.idx, 10)];
+        map[n.original] = n.normalise;
+      });
+      var cnt = Object.keys(map).length;
+      if (!cnt) { showToastIA('Aucune normalisation cochée', 'info'); return; }
+      applyTextReplacementsInNode(taxo[machineKey], map);
       window._saveTaxo();
       window._reloadWorkspace();
-      showToastIA('Normalisation appliquée (' + normas.length + ' libellés)', 'success');
+      showToastIA('Normalisation appliquée (' + cnt + ' libellés)', 'success');
     });
+    wireToggleAll('.ia-chk-norm');
   } catch (e) {
     showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
   }
@@ -437,6 +486,7 @@ document.getElementById('ia-btn-transfert-run').addEventListener('click', async 
 
     var html = '<p class="ia-count">' + transferts.length + ' élément(s) transférable(s) de <strong>' +
       esc(srcMachine.label || srcKey) + '</strong> vers <strong>' + esc(tgtMachine.label || tgtKey) + '</strong> :</p>' +
+      toggleAllButtonHtml() +
       '<div class="ia-suggestions">' +
       transferts.map(function (t, i) {
         var actionsStr = (t.actions || []).map(function (a) { return a.type + (a.note ? ' (' + a.note + ')' : ''); }).join(', ');
@@ -478,6 +528,7 @@ document.getElementById('ia-btn-transfert-run').addEventListener('click', async 
       window._reloadWorkspace();
       showToastIA(added + ' élément(s) transféré(s) vers ' + (tgtMachine.label || tgtKey), 'success');
     });
+    wireToggleAll('.ia-chk-tr');
   } catch (e) {
     showResults('<p class="ia-error">❌ ' + esc(e.message) + '</p>', null);
   }

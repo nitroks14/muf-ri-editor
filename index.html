@@ -350,7 +350,11 @@
       background: none; border: none; color: #fff; font-size: 1.2rem;
       cursor: pointer; line-height: 1; padding: 2px 6px;
     }
-    .ia-modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
+    /* flex:1 1 auto + min-height:0 : indispensable pour que le corps RÉTRÉCISSE
+       sous sa hauteur de contenu et active son propre overflow-y. Sans min-height:0
+       une longue liste (ex. 33 normalisations) gonfle le corps au-delà de max-height
+       et pousse le footer « Appliquer » hors de l'écran (cause du « pas de bouton »). */
+    .ia-modal-body { padding: 16px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
     /* Boutons actions IA */
     .ia-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .ia-action-btn {
@@ -382,6 +386,16 @@
     .ia-old  { color: #ef4444; text-decoration: line-through; font-style: italic; }
     .ia-new  { color: #10b981; font-weight: 600; }
     .ia-raison { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+    /* Barre « Tout cocher / décocher » au-dessus des listes à cases */
+    .ia-toggle-all {
+      display: inline-block; margin: 0 0 10px; padding: 0;
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      font-size: var(--font-size-xs); font-weight: 600; color: var(--color-primary);
+      text-decoration: underline;
+    }
+    .ia-checklist { display: flex; flex-direction: column; gap: 6px; }
+    .ia-check-item { display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+    .ia-check-item input { margin-top: 3px; flex-shrink: 0; }
     .ia-suggestions { display: flex; flex-direction: column; gap: 8px; }
     .ia-suggestion-item { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 10px 12px; }
     .ia-suggestion-check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: 600; }
