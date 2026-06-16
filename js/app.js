@@ -633,7 +633,9 @@ if (btnCollapse) {
    AFFICHAGE — RECHERCHE MAISON
    -----------------------------------------------------
    100% maison (pas de lib). Parcourt workspace.getAllBlocks(false), retient les
-   blocs dont LABEL ou NOTE contient la requete (insensible casse + accents).
+   blocs dont le texte (LABEL, NOTE, libelle du type d'action, unite) contient
+   TOUS les mots-cles de la requete (sous-chaine, ordre libre, insensible
+   casse + accents). Ex. « membrane soudure » matche « Membranes de soudure ».
    « Résultat suivant » (bouton ➜ ou Entrée) boucle sur les correspondances :
    centre (centerOnBlock), selectionne (block.select) et flashe brievement.
    Si un bloc cible est dans un parent replie, on deplie les ancetres pour le
@@ -656,22 +658,45 @@ function normaliserTexte(s) {
 
 function champsTexteBloc(b) {
   var parts = [];
+  if (!b || !b.getField) return '';
+  /* Champs de saisie libre : on prend la valeur brute. */
   ['LABEL', 'NOTE'].forEach(function(f) {
     /* getField evite une exception si le champ n'existe pas sur ce type. */
-    if (b.getField && b.getField(f)) {
+    if (b.getField(f)) {
       var v = b.getFieldValue(f);
       if (v) parts.push(v);
+    }
+  });
+  /* Dropdowns (type d'action, unite) : on prend le LIBELLE affiche (getText),
+     ex. « 📏 Mesure » ou « mbar », pas la valeur interne (« mesure »). */
+  ['ACTION_TYPE', 'UNITE'].forEach(function(f) {
+    var field = b.getField(f);
+    if (field && field.getText) {
+      var t = field.getText();
+      if (t) parts.push(t);
     }
   });
   return parts.join(' ');
 }
 
+/* Decoupe une requete normalisee en mots-cles (separateurs : espaces et
+   ponctuation simple), en ignorant les vides. */
+function tokeniserRequete(qNorm) {
+  return qNorm.split(/[^a-z0-9]+/).filter(function(w) { return w.length > 0; });
+}
+
 function calculerMatches(query) {
-  var q = normaliserTexte(query).trim();
+  var qNorm = normaliserTexte(query).trim();
   searchMatches = [];
-  if (!q || !workspace) return;
+  if (!qNorm || !workspace) return;
+  var mots = tokeniserRequete(qNorm);
+  if (!mots.length) return;
   workspace.getAllBlocks(false).forEach(function(b) {
-    if (normaliserTexte(champsTexteBloc(b)).indexOf(q) !== -1) searchMatches.push(b);
+    var texte = normaliserTexte(champsTexteBloc(b));
+    /* Un bloc matche si TOUS les mots de la requete sont presents comme
+       sous-chaine, dans n'importe quel ordre. */
+    var tousPresents = mots.every(function(m) { return texte.indexOf(m) !== -1; });
+    if (tousPresents) searchMatches.push(b);
   });
 }
 
