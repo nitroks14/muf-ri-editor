@@ -26,6 +26,13 @@ var onInjectionClick = null;
 var dernierRepliId = null;
 var dernierRepliTs = 0;
 
+/* Instances des plugins Blockly vendorises (minimap, backpack). Conservees
+   pour eviter une double-initialisation : le workspace n'est PAS recree par
+   switchMachine / _reloadWorkspace (seulement .clear() + recharge), donc une
+   init unique apres l'injection suffit ; les plugins suivent le workspace. */
+var minimapPlugin = null;
+var backpackPlugin = null;
+
 var CLES_RESERVEES = ['version', 'actionLabels', '_etats', '_etatsDefauts'];
 function estCleReservee(k) { return CLES_RESERVEES.indexOf(k) !== -1; }
 function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
@@ -964,6 +971,8 @@ function initBlockly() {
     searchLastQuery = '';
   });
 
+  initPluginsBlockly();
+
   injectionDiv = workspace.getInjectionDiv();
   onInjectionClick = function(e) {
     var blocks = workspace.getAllBlocks(false);
@@ -979,6 +988,58 @@ function initBlockly() {
     }
   };
   injectionDiv.addEventListener('click', onInjectionClick);
+}
+
+/* =====================================================
+   BLOCKLY — PLUGINS VENDORISES (offline)
+   =====================================================
+   Init defensive : chaque plugin est isole dans son propre try/catch avec
+   feature-detect du symbole global (les builds UMP copient leurs exports sur
+   window apres avoir consomme window.Blockly). Un plugin absent ou qui throw
+   ne doit JAMAIS empecher l'editeur de se charger ni casser les autres.
+
+   Plugins integres :
+     - Minimap (window.PositionedMinimap)  : vue d'ensemble miniature.
+     - Backpack (window.Backpack)          : sac a dos persistant (localStorage).
+   Plugin SKIPPE :
+     - Multi-selection : remplace le blockDragger natif (interagit directement
+       avec le verrou setMovable(false)) et repose sur SHIFT/Ctrl (pas d'UX
+       tactile iPad fiable). Trop de risque de regression -> non integre.
+
+   Le workspace n'etant pas recree par switchMachine / _reloadWorkspace, ces
+   plugins n'ont pas besoin d'etre re-initialises : ils observent le workspace. */
+function initPluginsBlockly() {
+  if (!workspace) return;
+
+  /* Minimap : vue d'ensemble. PositionedMinimap se place tout seul comme un
+     composant IPositionable du workspace (coin bas-droit par defaut). */
+  try {
+    if (typeof window.PositionedMinimap === 'function' && !minimapPlugin) {
+      minimapPlugin = new window.PositionedMinimap(workspace);
+      minimapPlugin.init();
+    }
+  } catch (err) {
+    minimapPlugin = null;
+    if (window.console && console.warn) console.warn('[plugins] Minimap non initialisee :', err);
+  }
+
+  /* Backpack : sac a dos persistant (localStorage). On garde les comportements
+     par defaut. allowEmptyBackpackOpen permet d'ouvrir le sac meme vide pour y
+     deposer le premier element. */
+  try {
+    if (typeof window.Backpack === 'function' && !backpackPlugin) {
+      backpackPlugin = new window.Backpack(workspace, {
+        allowEmptyBackpackOpen: true,
+        useFilledBackpackImage: true,
+        contextMenu: { copyToBackpack: true, pasteAllToBackpack: true,
+          removeFromBackpack: true, emptyBackpack: true, disablePreconditionChecks: false }
+      });
+      backpackPlugin.init();
+    }
+  } catch (err) {
+    backpackPlugin = null;
+    if (window.console && console.warn) console.warn('[plugins] Backpack non initialise :', err);
+  }
 }
 
 /* =====================================================

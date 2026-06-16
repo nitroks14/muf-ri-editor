@@ -1,4 +1,4 @@
-const CACHE = 'muf-ri-editor-v12';
+const CACHE = 'muf-ri-editor-v13';
 const BASE = '/muf-ri-editor';
 const ASSETS = [
   BASE + '/',
@@ -6,7 +6,9 @@ const ASSETS = [
   BASE + '/js/app.js',
   BASE + '/js/ia.js',
   BASE + '/manifest.json',
-  BASE + '/libs/blockly.min.js'
+  BASE + '/libs/blockly.min.js',
+  BASE + '/libs/minimap.umd.js',
+  BASE + '/libs/backpack.umd.js'
 ];
 
 self.addEventListener('install', e => {
