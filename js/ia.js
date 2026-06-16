@@ -4,8 +4,15 @@
 /* =====================================================
    GEMINI API
    ===================================================== */
-var GEMINI_MODEL   = 'gemini-2.0-flash';
-var GEMINI_LS_KEY  = 'muf_ri_gemini_key';
+/* Modèle Gemini par défaut. `gemini-flash-latest` est l'alias officiel qui
+   pointe toujours vers le modèle Flash courant (couvert par le free tier).
+   L'ancien `gemini-2.0-flash` a été déprécié (févr. 2026) puis retiré le
+   3 mars 2026 → il ne sert plus aucune requête (quota limit:0). Le modèle est
+   désormais configurable (localStorage GEMINI_MODEL_LS_KEY) pour absorber les
+   futures dépréciations Google sans toucher au code. */
+var GEMINI_DEFAULT_MODEL = 'gemini-flash-latest';
+var GEMINI_LS_KEY        = 'muf_ri_gemini_key';
+var GEMINI_MODEL_LS_KEY  = 'muf_ri_gemini_model';
 
 /* La cle Gemini est conservee en localStorage (persiste entre les sessions) :
    poste personnel, persistance demandee par l'utilisateur. Migration douce
@@ -21,12 +28,18 @@ var GEMINI_LS_KEY  = 'muf_ri_gemini_key';
 
 function getApiKey() { return localStorage.getItem(GEMINI_LS_KEY) || ''; }
 
+/* Modèle IA configuré (fallback sur le défaut si absent/vide). */
+function getModel() {
+  var m = (localStorage.getItem(GEMINI_MODEL_LS_KEY) || '').trim();
+  return m || GEMINI_DEFAULT_MODEL;
+}
+
 async function callGemini(prompt) {
   var key = getApiKey();
   if (!key) throw new Error('Clé API Gemini manquante — saisissez-la dans ⚙ Config');
 
   var resp = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key,
+    'https://generativelanguage.googleapis.com/v1beta/models/' + getModel() + ':generateContent?key=' + key,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -40,7 +53,12 @@ async function callGemini(prompt) {
   if (!resp.ok) {
     var errData = {};
     try { errData = await resp.json(); } catch (_) {}
-    throw new Error((errData.error && errData.error.message) || 'Erreur Gemini ' + resp.status);
+    var msg = (errData.error && errData.error.message) || 'Erreur Gemini ' + resp.status;
+    /* Quota / modèle introuvable ou retiré : oriente vers le réglage Config. */
+    if (resp.status === 429 || resp.status === 404 || resp.status === 400 || /quota|model/i.test(msg)) {
+      msg += ' (Vérifiez le modèle IA dans ⚙ Config)';
+    }
+    throw new Error(msg);
   }
 
   var data = await resp.json();
@@ -489,6 +507,21 @@ if (keyForget) {
   });
 }
 
+/* Champ « Modèle IA » : réglage non secret, persistant en localStorage.
+   Vide → fallback sur le défaut (le placeholder le rappelle). */
+var modelInput = document.getElementById('ia-gemini-model');
+if (modelInput) {
+  modelInput.value = (localStorage.getItem(GEMINI_MODEL_LS_KEY) || '').trim();
+  modelInput.addEventListener('input', function () {
+    var val = modelInput.value.trim();
+    if (val) {
+      localStorage.setItem(GEMINI_MODEL_LS_KEY, val);
+    } else {
+      localStorage.removeItem(GEMINI_MODEL_LS_KEY);
+    }
+  });
+}
+
 /* =====================================================
    API PUBLIQUE — accès à la clé Gemini (sync entre appareils)
    La clé Gemini est encapsulée ici (GEMINI_LS_KEY). On expose des
@@ -505,6 +538,21 @@ window.IA.setKey = function (val) {
     localStorage.removeItem(GEMINI_LS_KEY);
   }
   if (keyInput) keyInput.value = val;
+};
+/* Modèle IA (réglage non secret) — exposé pour l'inclure dans le sync chiffré.
+   getModel() renvoie toujours une valeur effective (fallback sur le défaut) ;
+   getModelRaw() renvoie la valeur stockée brute ('' si non personnalisée) afin
+   de n'exporter que les modèles réellement choisis par l'utilisateur. */
+window.IA.getModel    = function () { return getModel(); };
+window.IA.getModelRaw = function () { return (localStorage.getItem(GEMINI_MODEL_LS_KEY) || '').trim(); };
+window.IA.setModel = function (val) {
+  val = (val || '').trim();
+  if (val) {
+    localStorage.setItem(GEMINI_MODEL_LS_KEY, val);
+  } else {
+    localStorage.removeItem(GEMINI_MODEL_LS_KEY);
+  }
+  if (modelInput) modelInput.value = val;
 };
 
 /* =====================================================

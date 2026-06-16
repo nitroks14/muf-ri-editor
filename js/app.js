@@ -1370,6 +1370,11 @@ syncExportConfirm.addEventListener('click', async function () {
   if (tok) payload.token = tok;
   var gemini = (window.IA && window.IA.getKey) ? window.IA.getKey() : '';
   if (gemini) payload.gemini = gemini;
+  /* Modèle IA : réglage non secret. On n'exporte que s'il a été personnalisé
+     (getModelRaw renvoie '' si l'utilisateur utilise le défaut) pour ne pas
+     figer un défaut dans le blob. */
+  var model = (window.IA && window.IA.getModelRaw) ? window.IA.getModelRaw() : '';
+  if (model) payload.model = model;
   var cfg = lireConfig();
   if (cfg.owner || cfg.repo || cfg.branch) {
     payload.gh = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch };
@@ -1445,6 +1450,11 @@ document.getElementById('sync-import-confirm').addEventListener('click', async f
   /* Appliquer la clé Gemini via l'API exposée par ia.js. */
   if (payload.gemini && window.IA && window.IA.setKey) {
     window.IA.setKey(payload.gemini);
+  }
+  /* Modèle IA : rétro-compatible — un blob sans `model` n'écrase pas le
+     réglage local (ni le défaut). On n'applique que si présent et non vide. */
+  if (payload.model && window.IA && window.IA.setModel) {
+    window.IA.setModel(payload.model);
   }
   /* Appliquer la config GitHub si présente. */
   if (payload.gh && typeof payload.gh === 'object') {
