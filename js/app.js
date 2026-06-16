@@ -380,17 +380,27 @@ function appliquerVerrou() {
   }
 }
 
+/* Met a jour l'icone + le libelle d'un bouton icone (structure .te-btn-ico /
+   .te-btn-lbl) sans casser le markup. Repli sur innerHTML si structure absente. */
+function majBoutonIcone(btn, ico, lbl) {
+  if (!btn) return;
+  var icoEl = btn.querySelector('.te-btn-ico');
+  var lblEl = btn.querySelector('.te-btn-lbl');
+  if (icoEl && lblEl) { icoEl.textContent = ico; lblEl.textContent = lbl; }
+  else { btn.innerHTML = ico + ' ' + lbl; }
+}
+
 function majBoutonVerrou() {
   var btn = document.getElementById('te-lock');
   if (!btn) return;
   if (estVerrouille()) {
     btn.classList.remove('is-unlocked');
-    btn.innerHTML = '🔒 Blocs verrouillés';
-    btn.title = 'Les blocs ne peuvent pas être déplacés (édition des champs OK). Cliquer pour déverrouiller.';
+    majBoutonIcone(btn, '🔒', 'Verrou');
+    btn.title = 'Blocs verrouillés : déplacement bloqué (édition des champs OK). Cliquer pour déverrouiller.';
   } else {
     btn.classList.add('is-unlocked');
-    btn.innerHTML = '🔓 Blocs libres';
-    btn.title = 'Les blocs sont déplaçables / réorganisables. Cliquer pour verrouiller.';
+    majBoutonIcone(btn, '🔓', 'Libres');
+    btn.title = 'Blocs libres : déplaçables / réorganisables. Cliquer pour verrouiller.';
   }
 }
 
@@ -496,11 +506,11 @@ function majBoutonPalette() {
   if (!btn) return;
   if (paletteVisible()) {
     btn.classList.add('is-open');
-    btn.innerHTML = '◀ Palette';
+    majBoutonIcone(btn, '◀', 'Palette');
     btn.title = 'La palette de blocs est ouverte. Cliquer pour la replier.';
   } else {
     btn.classList.remove('is-open');
-    btn.innerHTML = '▶ Palette';
+    majBoutonIcone(btn, '▶', 'Palette');
     btn.title = 'Afficher la palette de blocs (Station / Sous-catégorie / Élément / Action).';
   }
 }
@@ -513,6 +523,263 @@ document.getElementById('te-palette').addEventListener('click', function() {
 });
 
 majBoutonPalette();
+
+/* =====================================================
+   AFFICHAGE — GRILLE / AIMANTATION (snap)
+   -----------------------------------------------------
+   La grille est definie a l'injection (cfg.grid, voir initBlockly). On bascule
+   l'aimantation a chaud via workspace.getGrid().setSnapToGrid(bool) (API v10
+   verifiee dans le bundle). Etat persiste en localStorage (muf_ri_grid_snap),
+   defaut ACTIVE. appliquerGrille() relit toujours le localStorage : reste
+   coherent apres switchMachine / _reloadWorkspace (la grille n'est pas re-creee,
+   mais on reapplique le snap par securite).
+   ===================================================== */
+var LS_GRID = 'muf_ri_grid_snap';
+
+function gridSnapActif() {
+  var v = localStorage.getItem(LS_GRID);
+  return v === null ? true : v === '1'; // defaut active si absent
+}
+
+function appliquerGrille() {
+  if (!workspace || !workspace.getGrid) return;
+  var grid = workspace.getGrid();
+  if (grid && grid.setSnapToGrid) grid.setSnapToGrid(gridSnapActif());
+}
+
+function majBoutonGrille() {
+  var btn = document.getElementById('te-grid');
+  if (!btn) return;
+  if (gridSnapActif()) {
+    btn.classList.add('is-active');
+    btn.title = 'Aimantation à la grille activée. Cliquer pour la désactiver.';
+  } else {
+    btn.classList.remove('is-active');
+    btn.title = 'Aimantation à la grille désactivée. Cliquer pour l\'activer.';
+  }
+}
+
+var btnGrid = document.getElementById('te-grid');
+if (btnGrid) {
+  btnGrid.addEventListener('click', function() {
+    var nouvelEtat = !gridSnapActif();
+    localStorage.setItem(LS_GRID, nouvelEtat ? '1' : '0');
+    appliquerGrille();
+    majBoutonGrille();
+    showToast(nouvelEtat ? '▦ Aimantation à la grille activée' : '▦ Aimantation à la grille désactivée', 'info');
+  });
+}
+majBoutonGrille();
+
+/* =====================================================
+   AFFICHAGE — ADAPTER (zoom to fit)
+   ===================================================== */
+var btnFit = document.getElementById('te-fit');
+if (btnFit) {
+  btnFit.addEventListener('click', function() {
+    if (!workspace) return;
+    if (workspace.zoomToFit) workspace.zoomToFit();
+    if (workspace.scrollCenter) workspace.scrollCenter();
+  });
+}
+
+/* =====================================================
+   AFFICHAGE — REPLIER / DEPLIER TOUT (bascule)
+   -----------------------------------------------------
+   Un seul bouton qui alterne : si au moins un bloc de premier niveau est
+   deplie, on REPLIE tout ; sinon on DEPLIE tout. On n'agit que sur les
+   blocs repliables (TYPES_REPLIABLES : station / sous-cat) via getTopBlocks
+   et un parcours en profondeur (setCollapsed existe en v10).
+   Apres collapse-all, on reapplique le verrou (les blocs restent les memes
+   objets mais on garde l'invariant) et on rafraichit l'historique.
+   ===================================================== */
+function blocsRepliablesProfondeur() {
+  if (!workspace) return [];
+  return workspace.getAllBlocks(false).filter(function(b) {
+    return TYPES_REPLIABLES.indexOf(b.type) !== -1;
+  });
+}
+
+function majBoutonCollapse() {
+  var btn = document.getElementById('te-collapse');
+  if (!btn) return;
+  var repliables = blocsRepliablesProfondeur();
+  var auMoinsUnDeplie = repliables.some(function(b) { return !b.isCollapsed(); });
+  /* Si au moins un est deplie -> l'action proposee est REPLIER. */
+  if (auMoinsUnDeplie) {
+    majBoutonIcone(btn, '⊟', 'Replier');
+    btn.title = 'Replier toutes les stations et sous-catégories.';
+  } else {
+    majBoutonIcone(btn, '⊞', 'Déplier');
+    btn.title = 'Déplier toutes les stations et sous-catégories.';
+  }
+}
+
+var btnCollapse = document.getElementById('te-collapse');
+if (btnCollapse) {
+  btnCollapse.addEventListener('click', function() {
+    if (!workspace) return;
+    var repliables = blocsRepliablesProfondeur();
+    if (!repliables.length) return;
+    var doitReplier = repliables.some(function(b) { return !b.isCollapsed(); });
+    repliables.forEach(function(b) { b.setCollapsed(doitReplier); });
+    appliquerVerrou();
+    majBoutonCollapse();
+    majBoutonsHistorique();
+  });
+}
+
+/* =====================================================
+   AFFICHAGE — RECHERCHE MAISON
+   -----------------------------------------------------
+   100% maison (pas de lib). Parcourt workspace.getAllBlocks(false), retient les
+   blocs dont LABEL ou NOTE contient la requete (insensible casse + accents).
+   « Résultat suivant » (bouton ➜ ou Entrée) boucle sur les correspondances :
+   centre (centerOnBlock), selectionne (block.select) et flashe brievement.
+   Si un bloc cible est dans un parent replie, on deplie les ancetres pour le
+   rendre visible avant de centrer.
+   ===================================================== */
+var searchPop    = document.getElementById('te-search-pop');
+var searchBtn    = document.getElementById('te-search-btn');
+var searchInput  = document.getElementById('te-search-input');
+var searchGo     = document.getElementById('te-search-go');
+var searchCount  = document.getElementById('te-search-count');
+var searchMatches = [];
+var searchIndex   = -1;
+var searchLastQuery = '';
+
+function normaliserTexte(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // retire les accents (diacritiques combinants)
+}
+
+function champsTexteBloc(b) {
+  var parts = [];
+  ['LABEL', 'NOTE'].forEach(function(f) {
+    /* getField evite une exception si le champ n'existe pas sur ce type. */
+    if (b.getField && b.getField(f)) {
+      var v = b.getFieldValue(f);
+      if (v) parts.push(v);
+    }
+  });
+  return parts.join(' ');
+}
+
+function calculerMatches(query) {
+  var q = normaliserTexte(query).trim();
+  searchMatches = [];
+  if (!q || !workspace) return;
+  workspace.getAllBlocks(false).forEach(function(b) {
+    if (normaliserTexte(champsTexteBloc(b)).indexOf(q) !== -1) searchMatches.push(b);
+  });
+}
+
+/* Deplie tous les ancetres replies d'un bloc pour le rendre visible. */
+function rendreVisible(block) {
+  var p = block.getSurroundParent ? block.getSurroundParent() : null;
+  while (p) {
+    if (p.isCollapsed && p.isCollapsed()) p.setCollapsed(false);
+    p = p.getSurroundParent ? p.getSurroundParent() : null;
+  }
+}
+
+function flasherBloc(block) {
+  var root = block.getSvgRoot && block.getSvgRoot();
+  if (!root) return;
+  root.classList.add('te-search-flash');
+  setTimeout(function() { root.classList.remove('te-search-flash'); }, 1400);
+}
+
+function allerVersResultat(idx) {
+  if (!searchMatches.length) return;
+  searchIndex = (idx + searchMatches.length) % searchMatches.length;
+  var block = searchMatches[searchIndex];
+  rendreVisible(block);
+  /* Le depli peut avoir change le rendu : centrer apres. */
+  if (workspace.centerOnBlock) workspace.centerOnBlock(block.id);
+  if (block.select) block.select();
+  flasherBloc(block);
+  if (searchCount) searchCount.textContent = (searchIndex + 1) + ' / ' + searchMatches.length + ' résultat(s)';
+}
+
+function lancerRecherche() {
+  if (!searchInput) return;
+  var query = searchInput.value;
+  if (!query.trim()) { if (searchCount) searchCount.textContent = ''; return; }
+  /* Nouvelle requete -> recalcul ; meme requete -> resultat suivant. */
+  if (normaliserTexte(query) !== searchLastQuery) {
+    calculerMatches(query);
+    searchIndex = -1;
+    searchLastQuery = normaliserTexte(query);
+  }
+  if (!searchMatches.length) {
+    if (searchCount) searchCount.textContent = 'Aucun résultat';
+    showToast('Aucun bloc ne correspond à « ' + query.trim() + ' »', 'info');
+    return;
+  }
+  allerVersResultat(searchIndex + 1);
+}
+
+function ouvrirRecherche() {
+  if (!searchPop) return;
+  fermerOverflow();
+  searchPop.classList.add('open');
+  if (searchBtn) searchBtn.setAttribute('aria-expanded', 'true');
+  setTimeout(function() { if (searchInput) { searchInput.focus(); searchInput.select(); } }, 30);
+}
+function fermerRecherche() {
+  if (!searchPop) return;
+  searchPop.classList.remove('open');
+  if (searchBtn) searchBtn.setAttribute('aria-expanded', 'false');
+}
+
+if (searchBtn) {
+  searchBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (searchPop.classList.contains('open')) fermerRecherche();
+    else ouvrirRecherche();
+  });
+}
+if (searchGo) searchGo.addEventListener('click', function(e) { e.stopPropagation(); lancerRecherche(); });
+if (searchInput) {
+  searchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); lancerRecherche(); }
+    else if (e.key === 'Escape') { fermerRecherche(); }
+  });
+  /* Frappe : invalide le cache de requete pour recalculer au prochain lancement. */
+  searchInput.addEventListener('input', function() { searchLastQuery = ''; });
+}
+if (searchPop) searchPop.addEventListener('click', function(e) { e.stopPropagation(); });
+
+/* =====================================================
+   MENU OVERFLOW « Plus »
+   ===================================================== */
+var moreBtn  = document.getElementById('te-more-btn');
+var moreMenu = document.getElementById('te-more-menu');
+
+function fermerOverflow() {
+  if (!moreMenu) return;
+  moreMenu.classList.remove('open');
+  if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+}
+function ouvrirOverflow() {
+  if (!moreMenu) return;
+  fermerRecherche();
+  moreMenu.classList.add('open');
+  if (moreBtn) moreBtn.setAttribute('aria-expanded', 'true');
+}
+if (moreBtn) {
+  moreBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (moreMenu.classList.contains('open')) fermerOverflow();
+    else ouvrirOverflow();
+  });
+}
+if (moreMenu) moreMenu.addEventListener('click', function() { fermerOverflow(); });
+
+/* Clic hors popovers : ferme recherche + overflow. */
+document.addEventListener('click', function() { fermerRecherche(); fermerOverflow(); });
 
 /* =====================================================
    BLOCKLY — DÉFINITIONS DES BLOCS
@@ -628,27 +895,48 @@ function initBlockly() {
     Blockly.config.flyoutDragRadius = 22;
   }
 
-  var cfg = { toolbox: toolbox, scrollbars: true, trashcan: true, collapse: true,
+  var cfg = { toolbox: toolbox, scrollbars: true, trashcan: true,
+    maxTrashcanContents: 32, collapse: true, comments: true,
     move: { scrollbars: true, drag: true, wheel: true },
-    zoom: { controls: true, wheel: true, startScale: 0.9 } };
+    /* pinch + bornes : zoom au doigt sur iPad, plage 0.3..3. */
+    zoom: { controls: true, wheel: true, pinch: true, startScale: 0.9, maxScale: 3, minScale: 0.3 },
+    /* grille + aimantation (snap bascule a chaud via le bouton Grille). */
+    grid: { spacing: 24, length: 3, colour: '#e2e8f0', snap: gridSnapActif() } };
   if (theme) cfg.theme = theme;
 
   workspace = Blockly.inject('te-workspace', cfg);
 
   appliquerVerrou();
   appliquerPalette();
+  appliquerGrille();
 
   renderTabs();
   if (machineKeys().length) switchMachine(machineKeys()[0]);
 
+  var EV = (Blockly && Blockly.Events) ? Blockly.Events : null;
   workspace.addChangeListener(function(event) {
+    /* Rafraichir le bouton bascule Replier/Deplier des qu'un bloc change d'etat
+       de repli (BLOCK_CHANGE element 'collapsed') ou que la structure evolue
+       (creation/suppression), meme pendant un chargement. Purement visuel.
+       Guard EV : si le namespace Events n'expose pas les constantes attendues,
+       on retombe sur un rafraichissement a chaque evenement non-UI (plus bas). */
+    if (EV && event && (
+        (event.type === EV.BLOCK_CHANGE && event.element === 'collapsed') ||
+        event.type === EV.BLOCK_CREATE ||
+        event.type === EV.BLOCK_DELETE)) {
+      majBoutonCollapse();
+    }
     if (chargementEnCours || event.isUiEvent) return;
+    if (!EV) majBoutonCollapse();
     if (!activeMachineKey) return;
     taxo[activeMachineKey].stations = extraireStations(workspace);
     sauvegarder();
     /* Toute edition (ajout/suppression/modif) fait evoluer les piles
        undo/redo -> on rafraichit l'etat grise des boutons. */
     majBoutonsHistorique();
+    /* Edition d'un libelle/note -> les correspondances de recherche peuvent
+       avoir change : on invalide le cache pour forcer un recalcul. */
+    searchLastQuery = '';
   });
 
   injectionDiv = workspace.getInjectionDiv();
@@ -730,7 +1018,11 @@ function switchMachine(key) {
   renderTabs();
   appliquerVerrou();
   appliquerPalette();
+  appliquerGrille();
   majBoutonsHistorique();
+  majBoutonCollapse();
+  /* Nouvelle machine chargee -> les correspondances de recherche sont obsoletes. */
+  searchLastQuery = '';
 }
 
 function ajouterMachine() {
@@ -1144,7 +1436,10 @@ window._reloadWorkspace = function () {
   if (workspace.clearUndo) workspace.clearUndo();
   appliquerVerrou();
   appliquerPalette();
+  appliquerGrille();
   majBoutonsHistorique();
+  majBoutonCollapse();
+  searchLastQuery = '';
 };
 
 charger().then(function() {

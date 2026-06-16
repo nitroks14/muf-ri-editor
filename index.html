@@ -33,46 +33,166 @@
       flex-direction: column;
     }
 
-    /* ---- Toolbar ---- */
+    /* ---- Toolbar (barre d'icones groupee) ---- */
     .te-toolbar {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 16px;
+      padding: 8px 12px;
       background: var(--color-primary);
       color: #fff;
       flex-shrink: 0;
       flex-wrap: wrap;
       z-index: 20;
+      position: relative;
     }
     .te-toolbar-title {
-      flex: 1;
       font-weight: 700;
       font-size: var(--font-size-md);
       white-space: nowrap;
+      margin-right: 4px;
     }
+    /* Groupe d'icones (separe visuellement) */
+    .te-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    /* Separateur vertical entre groupes */
+    .te-sep {
+      width: 1px;
+      align-self: stretch;
+      min-height: 28px;
+      background: rgba(255,255,255,0.22);
+      flex-shrink: 0;
+    }
+    /* Pousse le groupe suivant a droite */
+    .te-spacer { flex: 1 1 auto; }
+
+    /* Bouton icone tactile : icone au-dessus, libelle court dessous */
     .te-btn {
-      padding: 7px 14px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-width: 48px;
+      min-height: 44px;
+      padding: 5px 9px;
       border-radius: var(--radius);
       border: none;
       cursor: pointer;
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-xs);
       font-weight: 600;
       font-family: inherit;
-      transition: opacity var(--transition);
+      line-height: 1.1;
+      color: #fff;
+      background: rgba(255,255,255,0.12);
+      transition: background var(--transition), opacity var(--transition);
+      -webkit-tap-highlight-color: transparent;
     }
-    .te-btn:hover { opacity: 0.85; }
-    .te-btn-ghost   { background: rgba(255,255,255,0.15); color: #fff; }
-    .te-btn-push    { background: #10b981; color: #fff; }
-    .te-btn-reset   { background: rgba(255,255,255,0.1); color: #fff; }
-    .te-btn-config  { background: rgba(255,255,255,0.1); color: #fff; }
-.te-btn-lock    { background: rgba(255,255,255,0.15); color: #fff; }
-.te-btn-lock.is-unlocked { background: #6366f1; color: #fff; }
-.te-btn-palette { background: rgba(255,255,255,0.15); color: #fff; }
-.te-btn-palette.is-open { background: #6366f1; color: #fff; }
-.te-btn-history { background: rgba(255,255,255,0.1); color: #fff; }
-.te-btn:disabled { opacity: 0.4; cursor: default; }
-.te-btn:disabled:hover { opacity: 0.4; }
+    .te-btn:hover { background: rgba(255,255,255,0.22); }
+    .te-btn-ico { font-size: 1.15rem; line-height: 1; }
+    .te-btn-lbl { font-size: 0.66rem; white-space: nowrap; }
+    /* Variantes couleur (etats / accents) */
+    .te-btn-push    { background: #10b981; }
+    .te-btn-push:hover { background: #0ea372; }
+    .te-btn-ghost.is-accent,
+    .te-btn-lock.is-unlocked,
+    .te-btn-palette.is-open,
+    .te-btn.is-active { background: #6366f1; }
+    .te-btn-lock.is-unlocked:hover,
+    .te-btn-palette.is-open:hover,
+    .te-btn.is-active:hover { background: #5457e0; }
+    .te-btn:disabled { opacity: 0.4; cursor: default; }
+    .te-btn:disabled:hover { background: rgba(255,255,255,0.12); }
+
+    /* ---- Menu overflow "Plus" ---- */
+    .te-overflow-wrap { position: relative; }
+    .te-overflow-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 180px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      z-index: 30;
+    }
+    .te-overflow-menu.open { display: flex; }
+    .te-overflow-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 9px 10px;
+      border: none;
+      background: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-text);
+      text-align: left;
+    }
+    .te-overflow-item:hover { background: #eef2f7; }
+    .te-overflow-item .te-of-ico { font-size: 1.05rem; width: 20px; text-align: center; }
+
+    /* ---- Recherche maison (popover) ---- */
+    .te-search-wrap { position: relative; }
+    .te-search-pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 260px;
+      max-width: 80vw;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+      padding: 10px;
+      display: none;
+      z-index: 30;
+    }
+    .te-search-pop.open { display: block; }
+    .te-search-row { display: flex; gap: 6px; }
+    .te-search-input {
+      flex: 1; min-width: 0;
+      padding: 8px 10px;
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: var(--font-size-sm);
+      color: var(--color-text);
+    }
+    .te-search-input:focus { outline: none; border-color: var(--color-primary); }
+    .te-search-go {
+      flex-shrink: 0;
+      padding: 0 12px;
+      border: none; border-radius: var(--radius);
+      background: var(--color-primary); color: #fff;
+      cursor: pointer; font-weight: 700; font-family: inherit;
+    }
+    .te-search-go:hover { opacity: 0.88; }
+    .te-search-count { font-size: var(--font-size-xs); color: var(--color-text-muted); margin-top: 6px; min-height: 14px; }
+
+    /* Flash de surbrillance d'un bloc trouve (anneau anime) */
+    .te-search-flash > .blocklyPath,
+    .te-search-flash .blocklyPath {
+      stroke: #6366f1 !important;
+      stroke-width: 4px !important;
+    }
+
+    @media (max-width: 540px) {
+      .te-toolbar-title { font-size: var(--font-size-sm); width: 100%; }
+      .te-btn { min-width: 44px; padding: 5px 6px; }
+    }
 
     /* ---- Onglets machines ---- */
     .te-tabs {
@@ -330,14 +450,78 @@
 
 <div class="te-toolbar">
   <span class="te-toolbar-title">Éditeur Taxonomie RI &mdash; MUF</span>
-  <button class="te-btn te-btn-ghost"  id="te-ia-btn">🤖 IA</button>
-  <button class="te-btn te-btn-palette" id="te-palette">&#9654; Palette</button>
-  <button class="te-btn te-btn-lock"   id="te-lock">&#128274; Blocs verrouillés</button>
-  <button class="te-btn te-btn-history" id="te-undo" title="Annuler la dernière modification">&#8630; Annuler</button>
-  <button class="te-btn te-btn-history" id="te-redo" title="Rétablir la modification annulée">&#8631; Rétablir</button>
-  <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
-  <button class="te-btn te-btn-push"   id="te-push">&#8593; Push GitHub</button>
-  <button class="te-btn te-btn-config" id="te-config-btn">&#9881; Config</button>
+
+  <!-- GROUPE ÉDITION -->
+  <div class="te-group" role="group" aria-label="Édition">
+    <button class="te-btn te-btn-history" id="te-undo" title="Annuler la dernière modification" aria-label="Annuler">
+      <span class="te-btn-ico" aria-hidden="true">&#8630;</span><span class="te-btn-lbl">Annuler</span>
+    </button>
+    <button class="te-btn te-btn-history" id="te-redo" title="Rétablir la modification annulée" aria-label="Rétablir">
+      <span class="te-btn-ico" aria-hidden="true">&#8631;</span><span class="te-btn-lbl">Rétablir</span>
+    </button>
+    <button class="te-btn te-btn-lock" id="te-lock" title="Verrouillage des blocs" aria-label="Verrou des blocs">
+      <span class="te-btn-ico" aria-hidden="true">&#128274;</span><span class="te-btn-lbl">Verrou</span>
+    </button>
+  </div>
+
+  <span class="te-sep" aria-hidden="true"></span>
+
+  <!-- GROUPE AFFICHAGE -->
+  <div class="te-group" role="group" aria-label="Affichage">
+    <button class="te-btn te-btn-palette" id="te-palette" title="Afficher / replier la palette de blocs" aria-label="Palette">
+      <span class="te-btn-ico" aria-hidden="true">&#9654;</span><span class="te-btn-lbl">Palette</span>
+    </button>
+    <span class="te-search-wrap">
+      <button class="te-btn" id="te-search-btn" title="Rechercher un bloc" aria-label="Rechercher" aria-haspopup="true" aria-expanded="false">
+        <span class="te-btn-ico" aria-hidden="true">&#128269;</span><span class="te-btn-lbl">Recherche</span>
+      </button>
+      <div class="te-search-pop" id="te-search-pop" role="dialog" aria-label="Recherche dans la taxonomie">
+        <div class="te-search-row">
+          <input type="text" class="te-search-input" id="te-search-input" placeholder="Libellé ou note…" autocomplete="off" spellcheck="false" />
+          <button class="te-search-go" id="te-search-go" title="Résultat suivant" aria-label="Résultat suivant">&#10140;</button>
+        </div>
+        <div class="te-search-count" id="te-search-count" aria-live="polite"></div>
+      </div>
+    </span>
+    <button class="te-btn" id="te-fit" title="Adapter le zoom à tous les blocs" aria-label="Adapter">
+      <span class="te-btn-ico" aria-hidden="true">&#10530;</span><span class="te-btn-lbl">Adapter</span>
+    </button>
+    <button class="te-btn" id="te-collapse" title="Replier ou déplier tous les blocs" aria-label="Replier / déplier tout">
+      <span class="te-btn-ico" aria-hidden="true">&#9088;</span><span class="te-btn-lbl">Replier</span>
+    </button>
+    <button class="te-btn" id="te-grid" title="Activer / désactiver l'aimantation à la grille" aria-label="Grille">
+      <span class="te-btn-ico" aria-hidden="true">&#9638;</span><span class="te-btn-lbl">Grille</span>
+    </button>
+  </div>
+
+  <span class="te-sep" aria-hidden="true"></span>
+
+  <!-- GROUPE FICHIER -->
+  <div class="te-group" role="group" aria-label="Fichier">
+    <button class="te-btn te-btn-push" id="te-push" title="Pousser la taxonomie sur GitHub" aria-label="Push GitHub">
+      <span class="te-btn-ico" aria-hidden="true">&#10548;</span><span class="te-btn-lbl">Push</span>
+    </button>
+    <button class="te-btn te-btn-config" id="te-config-btn" title="Configuration GitHub / IA / Sync" aria-label="Config">
+      <span class="te-btn-ico" aria-hidden="true">&#9881;</span><span class="te-btn-lbl">Config</span>
+    </button>
+  </div>
+
+  <span class="te-spacer" aria-hidden="true"></span>
+
+  <!-- IA + Overflow -->
+  <button class="te-btn te-btn-ghost is-accent" id="te-ia-btn" title="Assistant IA" aria-label="Assistant IA">
+    <span class="te-btn-ico" aria-hidden="true">🤖</span><span class="te-btn-lbl">IA</span>
+  </button>
+  <span class="te-overflow-wrap">
+    <button class="te-btn" id="te-more-btn" title="Plus d'actions" aria-label="Plus d'actions" aria-haspopup="true" aria-expanded="false">
+      <span class="te-btn-ico" aria-hidden="true">&#8943;</span><span class="te-btn-lbl">Plus</span>
+    </button>
+    <div class="te-overflow-menu" id="te-more-menu" role="menu" aria-label="Actions supplémentaires">
+      <button class="te-overflow-item" id="te-reset" role="menuitem">
+        <span class="te-of-ico" aria-hidden="true">&#8634;</span><span>Réinitialiser depuis GitHub</span>
+      </button>
+    </div>
+  </span>
 </div>
 
 <div class="te-tabs" id="te-tabs"></div>
