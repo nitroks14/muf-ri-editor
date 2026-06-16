@@ -410,6 +410,55 @@ document.getElementById('te-lock').addEventListener('click', function() {
 majBoutonVerrou();
 
 /* =====================================================
+   HISTORIQUE — UNDO / REDO (taxonomie)
+   -----------------------------------------------------
+   Blockly v10 maintient sa propre pile d'evenements :
+     - workspace.undo(false) -> annuler
+     - workspace.undo(true)  -> retablir
+   Indispensable au tactile (iPad sans clavier) : deux boutons toolbar.
+
+   Apres un undo/redo :
+     - on reapplique le verrou (appliquerVerrou) car les blocs restaures
+       doivent respecter l'etat verrouille/deverrouille courant ;
+     - le addChangeListener d'initBlockly se redeclenche (l'evenement undo
+       n'est PAS un isUiEvent), donc extraireStations + sauvegarder reecrivent
+       bien taxo[activeMachineKey] -> la serialisation reste coherente.
+
+   Le verrou n'empeche QUE le drag (setMovable), pas l'edition via historique :
+   undo/redo fonctionne donc meme blocs verrouilles (comportement voulu).
+
+   Les piles getUndoStack/getRedoStack existent en v10 : on grise les boutons
+   quand il n'y a rien a annuler/retablir (undo sur pile vide = no-op de toute
+   facon, le grisage est purement informatif).
+   ===================================================== */
+function majBoutonsHistorique() {
+  var btnU = document.getElementById('te-undo');
+  var btnR = document.getElementById('te-redo');
+  if (!workspace) return;
+  if (btnU && workspace.getUndoStack) {
+    btnU.disabled = workspace.getUndoStack().length === 0;
+  }
+  if (btnR && workspace.getRedoStack) {
+    btnR.disabled = workspace.getRedoStack().length === 0;
+  }
+}
+
+function appliquerHistorique(redo) {
+  if (!workspace) return;
+  workspace.undo(redo); // false = annuler, true = retablir
+  /* Les blocs restaures doivent respecter le verrou courant (drag). */
+  appliquerVerrou();
+  majBoutonsHistorique();
+}
+
+document.getElementById('te-undo').addEventListener('click', function() {
+  appliquerHistorique(false);
+});
+document.getElementById('te-redo').addEventListener('click', function() {
+  appliquerHistorique(true);
+});
+
+/* =====================================================
    PALETTE DE BLOCS (flyout) REPLIABLE
    -----------------------------------------------------
    Le toolbox est un flyoutToolbox : une colonne de blocs toujours rendue a
@@ -597,6 +646,9 @@ function initBlockly() {
     if (!activeMachineKey) return;
     taxo[activeMachineKey].stations = extraireStations(workspace);
     sauvegarder();
+    /* Toute edition (ajout/suppression/modif) fait evoluer les piles
+       undo/redo -> on rafraichit l'etat grise des boutons. */
+    majBoutonsHistorique();
   });
 
   injectionDiv = workspace.getInjectionDiv();
@@ -672,9 +724,13 @@ function switchMachine(key) {
   workspace.clear();
   chargerMachineEnBlocs(workspace, key);
   chargementEnCours = false;
+  /* Le chargement d'une machine genere une rafale d'evenements Blockly. On purge
+     la pile d'historique pour que « Annuler » ne defasse PAS le chargement. */
+  if (workspace.clearUndo) workspace.clearUndo();
   renderTabs();
   appliquerVerrou();
   appliquerPalette();
+  majBoutonsHistorique();
 }
 
 function ajouterMachine() {
@@ -1036,6 +1092,25 @@ document.getElementById('sync-import-confirm').addEventListener('click', async f
    SERVICE WORKER
    ===================================================== */
 if ('serviceWorker' in navigator) {
+  /* Etat du controleur AU CHARGEMENT (avant register). S'il existe deja, c'est
+     que la page est deja pilotee par un SW : un futur controllerchange signifie
+     alors qu'un NOUVEAU SW a pris la main (apres un bump) -> on recharge pour
+     resynchroniser les assets et eviter l'editeur transitoirement vide.
+     S'il n'existe PAS (premier enregistrement), le premier controllerchange est
+     la prise de controle initiale : on NE recharge PAS (garde anti-boucle). */
+  var _swHadController = !!navigator.serviceWorker.controller;
+  var _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!_swHadController) {
+      /* Premiere prise de controle (premier enregistrement) : pas de reload,
+         puis on considere desormais qu'un controleur est en place. */
+      _swHadController = true;
+      return;
+    }
+    if (_swRefreshing) return;
+    _swRefreshing = true;
+    window.location.reload();
+  });
   navigator.serviceWorker.register('sw.js').catch(function() {});
 }
 
@@ -1065,8 +1140,11 @@ window._reloadWorkspace = function () {
   workspace.clear();
   chargerMachineEnBlocs(workspace, activeMachineKey);
   chargementEnCours = false;
+  /* Idem switchMachine : on ne veut pas que « Annuler » revienne sur le re-render. */
+  if (workspace.clearUndo) workspace.clearUndo();
   appliquerVerrou();
   appliquerPalette();
+  majBoutonsHistorique();
 };
 
 charger().then(function() {

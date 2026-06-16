@@ -70,6 +70,9 @@
 .te-btn-lock.is-unlocked { background: #6366f1; color: #fff; }
 .te-btn-palette { background: rgba(255,255,255,0.15); color: #fff; }
 .te-btn-palette.is-open { background: #6366f1; color: #fff; }
+.te-btn-history { background: rgba(255,255,255,0.1); color: #fff; }
+.te-btn:disabled { opacity: 0.4; cursor: default; }
+.te-btn:disabled:hover { opacity: 0.4; }
 
     /* ---- Onglets machines ---- */
     .te-tabs {
@@ -330,6 +333,8 @@
   <button class="te-btn te-btn-ghost"  id="te-ia-btn">🤖 IA</button>
   <button class="te-btn te-btn-palette" id="te-palette">&#9654; Palette</button>
   <button class="te-btn te-btn-lock"   id="te-lock">&#128274; Blocs verrouillés</button>
+  <button class="te-btn te-btn-history" id="te-undo" title="Annuler la dernière modification">&#8630; Annuler</button>
+  <button class="te-btn te-btn-history" id="te-redo" title="Rétablir la modification annulée">&#8631; Rétablir</button>
   <button class="te-btn te-btn-reset"  id="te-reset">&#8634; Reset</button>
   <button class="te-btn te-btn-push"   id="te-push">&#8593; Push GitHub</button>
   <button class="te-btn te-btn-config" id="te-config-btn">&#9881; Config</button>
