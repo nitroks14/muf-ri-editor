@@ -34,10 +34,39 @@ function getModel() {
   return m || GEMINI_DEFAULT_MODEL;
 }
 
-async function callGemini(prompt) {
-  var key = getApiKey();
-  if (!key) throw new Error('Clé API Gemini manquante — saisissez-la dans ⚙ Config');
+/* Réessai automatique : nb de tentatives + backoff (ms) avant chaque réessai. */
+var GEMINI_MAX_ATTEMPTS = 3;
+var GEMINI_BACKOFF_MS   = [1000, 2000, 4000];
 
+/* Indique si une erreur Gemini est transitoire (modèle surchargé / indispo)
+   et mérite donc un réessai. Couvre les statuts 503/429 et les messages
+   typiques renvoyés par Google en cas de pic de demande.
+   Les autres erreurs (400/401/404, clé/modèle invalide) renvoient false :
+   un réessai serait inutile, on remonte immédiatement. */
+function estErreurTransitoireGemini(status, msg) {
+  if (status === 503 || status === 429) return true;
+  return /overloaded|high demand|unavailable|try again|resource_exhausted/i.test(msg || '');
+}
+
+/* Marqueur posé sur les erreurs transitoires pour piloter la boucle de réessai. */
+function erreurTransitoire(message) {
+  var e = new Error(message);
+  e._transient = true;
+  return e;
+}
+
+/* Met à jour le texte du spinner de la modale (« Réessai… (n/3) »).
+   Repli silencieux si la modale/le span n'existe pas (appel hors UI). */
+function setSpinnerTexte(txt) {
+  try {
+    var span = modalSpinner && modalSpinner.querySelector('span');
+    if (span) span.textContent = txt;
+  } catch (_) {}
+}
+
+/* Une seule tentative d'appel Gemini. Lève une erreur (marquée transitoire
+   ou non) en cas d'échec ; renvoie l'objet JSON parsé en cas de succès. */
+async function callGeminiOnce(prompt, key) {
   var resp = await fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/' + getModel() + ':generateContent?key=' + key,
     {
@@ -54,8 +83,9 @@ async function callGemini(prompt) {
     var errData = {};
     try { errData = await resp.json(); } catch (_) {}
     var msg = (errData.error && errData.error.message) || 'Erreur Gemini ' + resp.status;
+    if (estErreurTransitoireGemini(resp.status, msg)) throw erreurTransitoire(msg);
     /* Quota / modèle introuvable ou retiré : oriente vers le réglage Config. */
-    if (resp.status === 429 || resp.status === 404 || resp.status === 400 || /quota|model/i.test(msg)) {
+    if (resp.status === 404 || resp.status === 400 || /quota|model/i.test(msg)) {
       msg += ' (Vérifiez le modèle IA dans ⚙ Config)';
     }
     throw new Error(msg);
@@ -67,6 +97,34 @@ async function callGemini(prompt) {
              data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
   if (!text) throw new Error('Réponse vide de Gemini');
   return JSON.parse(text);
+}
+
+async function callGemini(prompt) {
+  var key = getApiKey();
+  if (!key) throw new Error('Clé API Gemini manquante — saisissez-la dans ⚙ Config');
+
+  var defaultTexte = 'Gemini analyse la taxonomie…';
+  for (var attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+    try {
+      var result = await callGeminiOnce(prompt, key);
+      if (attempt > 1) setSpinnerTexte(defaultTexte); /* restaure le texte après réessai réussi */
+      return result;
+    } catch (err) {
+      var dernier = (attempt === GEMINI_MAX_ATTEMPTS);
+      /* Erreur non transitoire ou dernière tentative épuisée : on remonte. */
+      if (!err._transient || dernier) {
+        if (err._transient && dernier) {
+          err.message += ' (Vérifiez le modèle IA dans ⚙ Config)';
+        }
+        setSpinnerTexte(defaultTexte);
+        throw err;
+      }
+      /* Erreur transitoire : on patiente (backoff exponentiel + gigue) puis on réessaie. */
+      setSpinnerTexte('Réessai… (' + (attempt + 1) + '/' + GEMINI_MAX_ATTEMPTS + ')');
+      var delai = GEMINI_BACKOFF_MS[attempt - 1] + Math.floor(Math.random() * 300);
+      await new Promise(function (r) { setTimeout(r, delai); });
+    }
+  }
 }
 
 /* =====================================================
