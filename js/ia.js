@@ -70,6 +70,123 @@ async function callGemini(prompt) {
 }
 
 /* =====================================================
+   BASE DE CONNAISSANCES MULTIVAC (grounding)
+   Récupère la doc de référence depuis le dépôt PRIVÉ
+   nitroks14/muf-knowledge via l'API GitHub + le PAT déjà saisi
+   par l'utilisateur (window._getGithubToken, exposé par app.js).
+   Cache local par fichier + repli silencieux si indisponible :
+   les Suggestions continuent de fonctionner sans grounding.
+   ===================================================== */
+var KB_REPO    = 'nitroks14/muf-knowledge';
+var KB_BRANCH  = 'main';
+var KB_LS_PREFIX = 'muf_kb_';
+
+/* Description des familles : fichier source + clé de cache localStorage. */
+var KB_FAMILLES = {
+  C: { file: 'knowledge-serie-C.json', ls: KB_LS_PREFIX + 'serie_C' },
+  T: { file: 'knowledge-serie-T.json', ls: KB_LS_PREFIX + 'serie_T' },
+  R: { file: 'knowledge-serie-R.json', ls: KB_LS_PREFIX + 'serie_R' }
+};
+
+/* Normalise une chaîne pour un matching robuste (minuscule, sans accents). */
+function kbNorm(str) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/* Mappe une machine (clé + label) vers une famille (C / T / R) ou null. */
+function detecterFamille(machineKey, machineLabel) {
+  var s = kbNorm(machineKey) + ' ' + kbNorm(machineLabel);
+  if (/cloche|serie c\b|serie-c\b/.test(s)) return 'C';
+  if (/operculeuse|traysealer|serie t\b|serie-t\b/.test(s)) return 'T';
+  if (/thermoform|serie r\b|serie-r\b/.test(s)) return 'R';
+  return null;
+}
+
+/* Lit le contenu en cache pour une famille (objet parsé) ou null. */
+function lireCacheConnaissances(fam) {
+  var desc = KB_FAMILLES[fam];
+  if (!desc) return null;
+  try {
+    var raw = localStorage.getItem(desc.ls);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+/* Fetch le fichier de connaissances d'une famille via l'API GitHub (dépôt privé).
+   Renvoie l'objet parsé, ou null en cas d'absence de PAT / erreur (repli). */
+async function fetchConnaissances(fam) {
+  var desc = KB_FAMILLES[fam];
+  if (!desc) return null;
+
+  var token = (typeof window._getGithubToken === 'function') ? window._getGithubToken() : '';
+  if (!token) { console.warn('[KB] Pas de PAT GitHub — grounding désactivé.'); return null; }
+
+  try {
+    var resp = await fetch(
+      'https://api.github.com/repos/' + KB_REPO + '/contents/' + desc.file + '?ref=' + KB_BRANCH,
+      { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.raw' } }
+    );
+    if (!resp.ok) { console.warn('[KB] Échec fetch ' + desc.file + ' (' + resp.status + ') — repli sans grounding.'); return null; }
+    var text = await resp.text();
+    var obj  = JSON.parse(text);
+    try { localStorage.setItem(desc.ls, text); } catch (_) {}
+    return obj;
+  } catch (e) {
+    console.warn('[KB] Erreur réseau/parse pour ' + desc.file + ' — repli sans grounding.', e);
+    return null;
+  }
+}
+
+/* Charge les connaissances de la famille active.
+   Stratégie : sert le cache immédiatement s'il existe (et rafraîchit en
+   arrière-plan, best-effort) ; sinon fetch synchrone. Repli → null. */
+async function chargerConnaissances(fam) {
+  if (!KB_FAMILLES[fam]) return null;
+  var cached = lireCacheConnaissances(fam);
+  if (cached) {
+    /* Rafraîchissement best-effort, sans bloquer ni propager d'erreur. */
+    fetchConnaissances(fam).catch(function () {});
+    return cached;
+  }
+  return await fetchConnaissances(fam);
+}
+
+/* Construit un bloc de contexte condensé à partir des entrées d'une famille.
+   Privilégie les domaines pertinents puis complète ; tronque à ~12000 car. */
+function construireContexteConnaissances(kb) {
+  if (!kb || !Array.isArray(kb.entries) || !kb.entries.length) return '';
+  var PRIORITAIRES = { structure: 1, maintenance: 1, lubrification: 1, process: 1 };
+  var entries = kb.entries.slice().sort(function (a, b) {
+    var pa = PRIORITAIRES[kbNorm(a.domaine)] ? 0 : 1;
+    var pb = PRIORITAIRES[kbNorm(b.domaine)] ? 0 : 1;
+    return pa - pb;
+  });
+
+  var MAX = 12000;
+  var lignes = [];
+  var taille = 0;
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var parts = [];
+    if (e.sujet)   parts.push(e.sujet);
+    if (e.contenu) parts.push(e.contenu);
+    if (e.periodicite) parts.push('[périodicité : ' + e.periodicite + ']');
+    if (!parts.length) continue;
+    var prefixe = [];
+    if (e.station)   prefixe.push(e.station);
+    if (e.composant) prefixe.push(e.composant);
+    var entete = (e.domaine ? '(' + e.domaine + ') ' : '') + (prefixe.length ? prefixe.join(' › ') + ' — ' : '');
+    var ligne = '- ' + entete + parts.join(' : ');
+    if (taille + ligne.length > MAX) break;
+    lignes.push(ligne);
+    taille += ligne.length + 1;
+  }
+  return lignes.join('\n');
+}
+
+/* =====================================================
    HELPERS TAXONOMIE
    ===================================================== */
 /* Applique les remplacements de texte UNIQUEMENT à l'intérieur de l'objet
@@ -252,7 +369,31 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
     }
     var machine = taxo[machineKey];
 
+    /* Grounding optionnel : connaissances Multivac de la famille active.
+       Repli silencieux si pas de PAT / fetch en échec / famille inconnue. */
+    var blocConnaissances = '';
+    try {
+      var fam = detecterFamille(machineKey, machine.label);
+      if (fam) {
+        var kb = await chargerConnaissances(fam);
+        blocConnaissances = construireContexteConnaissances(kb);
+      }
+    } catch (_) { blocConnaissances = ''; }
+
+    var groundingPrompt = '';
+    if (blocConnaissances) {
+      groundingPrompt =
+        'CONNAISSANCES MULTIVAC DE RÉFÉRENCE (issues des notices officielles, à utiliser ' +
+        'en priorité pour des suggestions réalistes et spécifiques à cette machine) :\n' +
+        blocConnaissances + '\n\n' +
+        'Base tes suggestions en PRIORITÉ sur ces connaissances Multivac réelles ET sur la ' +
+        'taxonomie existante. Propose des éléments/actions cohérents avec la doc (composants, ' +
+        'périodicités, points de graissage, etc.). N\'invente pas d\'éléments hors de ce cadre ' +
+        'quand c\'est possible.\n\n';
+    }
+
     var prompt = 'Tu es un expert en maintenance préventive de machines d\'emballage alimentaire industriel.\n' +
+      groundingPrompt +
       'Voici la taxonomie actuelle de la machine "' + machine.label + '" :\n\n' +
       JSON.stringify(machine, null, 2) + '\n\n' +
       'Identifie les éléments de maintenance manquants ou les actions manquantes selon les bonnes pratiques industrielles. ' +
