@@ -290,6 +290,7 @@ var modalResults = document.getElementById('ia-modal-results');
 var modalActions = document.getElementById('ia-modal-actions');
 var btnAccept    = document.getElementById('ia-btn-accept');
 var btnReject    = document.getElementById('ia-btn-reject');
+var btnAcceptHeader = document.getElementById('ia-btn-accept-header');
 
 var _pendingApply = null;
 
@@ -299,6 +300,7 @@ function openModal(title) {
   modalResults.innerHTML   = '';
   modalResults.style.display = 'none';
   modalActions.classList.remove('visible');
+  if (btnAcceptHeader) btnAcceptHeader.style.display = 'none';
   _pendingApply = null;
   var actionsView = document.getElementById('ia-actions-view');
   if (actionsView) actionsView.style.display = 'none';
@@ -309,10 +311,44 @@ function showResults(html, onAccept) {
   modalSpinner.style.display   = 'none';
   modalResults.innerHTML       = html;
   modalResults.style.display   = 'block';
-  if (onAccept) modalActions.classList.add('visible');
-  else modalActions.classList.remove('visible');
+  if (onAccept) {
+    modalActions.classList.add('visible');
+    if (btnAcceptHeader) {
+      btnAcceptHeader.style.display = 'inline-flex';
+      updateHeaderAcceptLabel();
+    }
+  } else {
+    modalActions.classList.remove('visible');
+    if (btnAcceptHeader) btnAcceptHeader.style.display = 'none';
+  }
   _pendingApply = onAccept || null;
 }
+
+/* Met à jour le libellé du bouton d'en-tête avec le nombre de cases cochées
+   (cases d'application des résultats IA). Affiche « ✓ Appliquer » sans compteur
+   s'il n'y a aucune case à cocher dans la vue courante. */
+function updateHeaderAcceptLabel() {
+  if (!btnAcceptHeader) return;
+  var boxes = modalResults.querySelectorAll('.ia-chk-ortho, .ia-chk-norm, .ia-chk-tr, .ia-chk');
+  if (boxes.length === 0) { btnAcceptHeader.textContent = '✓ Appliquer'; return; }
+  var n = 0;
+  boxes.forEach(function (b) { if (b.checked) n++; });
+  btnAcceptHeader.textContent = '✓ Appliquer (' + n + ')';
+}
+
+/* Recalcule le compteur quand une case de la zone résultats change. */
+modalResults.addEventListener('change', function (e) {
+  if (e.target && e.target.matches && e.target.matches('.ia-chk-ortho, .ia-chk-norm, .ia-chk-tr, .ia-chk')) {
+    updateHeaderAcceptLabel();
+  }
+});
+/* Le bouton « tout cocher/décocher » modifie les cases par JS (pas d'évènement
+   change déclenché) : on resynchronise le compteur après un clic dans la zone. */
+modalResults.addEventListener('click', function (e) {
+  if (e.target && e.target.matches && e.target.matches('[data-toggle-all]')) {
+    setTimeout(updateHeaderAcceptLabel, 0);
+  }
+});
 
 /* Bouton « Tout cocher / Tout décocher » : HTML à insérer en tête d'une liste à cases.
    `selector` cible les cases concernées dans #ia-modal-results. */
@@ -336,6 +372,7 @@ function wireToggleAll(selector) {
 function closeModal() {
   modal.classList.remove('open');
   _pendingApply = null;
+  if (btnAcceptHeader) btnAcceptHeader.style.display = 'none';
   var actionsView = document.getElementById('ia-actions-view');
   if (actionsView) actionsView.style.display = '';
   var picker = document.getElementById('ia-transfert-picker');
@@ -347,11 +384,17 @@ function closeModal() {
 document.getElementById('ia-modal-close').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
 
-btnReject.addEventListener('click', closeModal);
-btnAccept.addEventListener('click', function () {
+/* Logique d'application partagée par les deux boutons « Appliquer »
+   (footer historique + en-tête toujours visible) : exécute l'action en attente
+   puis ferme/réinitialise la modale. */
+function appliquerEtFermer() {
   if (_pendingApply) _pendingApply();
   closeModal();
-});
+}
+
+btnReject.addEventListener('click', closeModal);
+btnAccept.addEventListener('click', appliquerEtFermer);
+if (btnAcceptHeader) btnAcceptHeader.addEventListener('click', appliquerEtFermer);
 
 /* =====================================================
    1. CORRECTION ORTHOGRAPHIQUE
