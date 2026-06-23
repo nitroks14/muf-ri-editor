@@ -1,14 +1,19 @@
-const CACHE = 'muf-ri-editor-v19';
+const CACHE = 'muf-ri-editor-v20';
 const BASE = '/muf-ri-editor';
 const ASSETS = [
   BASE + '/',
   BASE + '/index.html',
+  BASE + '/js/config.js',
+  BASE + '/js/supabase-client.js',
+  BASE + '/js/auth.js',
   BASE + '/js/app.js',
   BASE + '/js/ia.js',
+  BASE + '/js/login-ui.js',
   BASE + '/manifest.json',
   BASE + '/libs/blockly.min.js',
   BASE + '/libs/minimap.umd.js',
-  BASE + '/libs/backpack.umd.js'
+  BASE + '/libs/backpack.umd.js',
+  BASE + '/libs/supabase.umd.js'
 ];
 
 self.addEventListener('install', e => {
