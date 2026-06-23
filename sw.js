@@ -1,4 +1,4 @@
-const CACHE = 'muf-ri-editor-v20';
+const CACHE = 'muf-ri-editor-v21';
 const BASE = '/muf-ri-editor';
 const ASSETS = [
   BASE + '/',
@@ -29,6 +29,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Ne pas intercepter : requetes non-GET (ex POST API) ni cross-origin (ex Cerveau /v1/context).
+  if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   // Network-first pour les navigations / l'index : evite de rester bloque sur un cache obsolete.
   if (e.request.mode === 'navigate') {
     e.respondWith(
