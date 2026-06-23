@@ -156,34 +156,6 @@ function kbNorm(str) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/* Détecte la famille (C / T / R) d'une machine d'après sa clé + son label.
-   Conservé tel quel : sert de base au mapping vers le type_machine du Cerveau. */
-function detecterFamille(machineKey, machineLabel) {
-  var s = kbNorm(machineKey) + ' ' + kbNorm(machineLabel);
-  if (/cloche|serie c\b|serie-c\b/.test(s)) return 'C';
-  if (/operculeuse|traysealer|serie t\b|serie-t\b/.test(s)) return 'T';
-  if (/thermoform|serie r\b|serie-r\b/.test(s)) return 'R';
-  return null;
-}
-
-/* Mappe une famille muf-ri-editor (C / T / R) vers un `type_machine` du Cerveau.
-   Le Cerveau indexe par type de machine Multivac ; nos familles sont plus
-   grossières. On choisit le type « représentatif » de chaque famille :
-     - C → cloche (machines sous cloche, type C, ex. C500)
-     - T → operculeuse (traysealer, type T, ex. T200)
-     - R → thermoformeuse (type R)
-   Le mapping est volontairement APPROXIMATIF : il sert de FILTRE LARGE pour
-   orienter le RAG. Si la famille est inconnue (null), on ne filtre pas et on
-   laisse le RAG trancher sur la seule question. */
-function familleVersTypeMachine(fam) {
-  switch (fam) {
-    case 'C': return 'cloche';
-    case 'T': return 'operculeuse';
-    case 'R': return 'thermoformeuse';
-    default:  return null;
-  }
-}
-
 /* Interroge le Cerveau (POST {BRAIN_URL}/v1/context) avec le JWT Supabase.
    @param {string} question  - requête en langage naturel pour le RAG
    @param {object} contexte  - { type_machine?, generation?, options? }
@@ -511,20 +483,19 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
     var machine = taxo[machineKey];
 
     /* Grounding via le Cerveau (RAG) : on formule une question pertinente pour
-       la machine active et on filtre (large) sur son type_machine déduit de la
-       famille C/T/R. Repli gracieux si le Cerveau est injoignable : l'IA
-       continue sans grounding (un avertissement est affiché). */
+       la machine active. Le ciblage machine repose UNIQUEMENT sur la recherche
+       sémantique (le nom de la machine est inclus dans la question) : on
+       n'envoie plus de filtre type_machine, inexploitable car chunks.type_machine
+       ne contient que des codes modèles (R535, T850…), jamais nos familles
+       C/T/R. Repli gracieux si le Cerveau est injoignable : l'IA continue sans
+       grounding (un avertissement est affiché). */
     var blocConnaissances = '';
     var groundingIndispo = false;
     try {
-      var fam = detecterFamille(machineKey, machine.label);
-      var typeMachine = familleVersTypeMachine(fam);
       var question = 'Maintenance préventive de la machine « ' + (machine.label || machineKey) +
         ' » : éléments, composants, points de graissage, périodicités et actions ' +
         'de contrôle/nettoyage recommandés par la documentation Multivac.';
-      var contexte = {};
-      if (typeMachine) contexte.type_machine = typeMachine;
-      var reponseCerveau = await interrogerCerveau(question, contexte);
+      var reponseCerveau = await interrogerCerveau(question, {});
       blocConnaissances = assemblerContexteCerveau(reponseCerveau);
     } catch (errBrain) {
       if (errBrain && errBrain._needLogin) {
