@@ -1521,9 +1521,12 @@ document.getElementById('te-ia-btn').addEventListener('click', function () {
    ===================================================== */
 window._getTaxo        = function () { return taxo; };
 window._getMachineKey  = function () { return activeMachineKey; };
-/* Expose le PAT GitHub (lecture seule) à ia.js pour le grounding sur la base
-   de connaissances privée Multivac (dépôt privé nitroks14/muf-knowledge).
-   Encapsulation préservée : ia.js n'accède jamais directement à LS_GH_TOKEN. */
+/* NOTE : le grounding IA passe désormais par le Cerveau Multivac (/v1/context,
+   auth JWT Supabase) et n'utilise PLUS le PAT GitHub (ancienne base privée
+   nitroks14/muf-knowledge, décommissionnée). Le PAT (LS_GH_TOKEN, getToken)
+   reste EXCLUSIVEMENT dédié à la TAXONOMIE (pull/push nitroks14/muf-ri-taxonomy).
+   `window._getGithubToken` n'est plus consommé par ia.js ; on le conserve pour
+   compatibilité (lecture seule du PAT), sans nouvel usage. */
 window._getGithubToken = function () { return getToken(); };
 window._saveTaxo       = function () { sauvegarder(); };
 window._reloadWorkspace = function () {

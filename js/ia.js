@@ -128,23 +128,26 @@ async function callGemini(prompt) {
 }
 
 /* =====================================================
-   BASE DE CONNAISSANCES MULTIVAC (grounding)
-   Récupère la doc de référence depuis le dépôt PRIVÉ
-   nitroks14/muf-knowledge via l'API GitHub + le PAT déjà saisi
-   par l'utilisateur (window._getGithubToken, exposé par app.js).
-   Cache local par fichier + repli silencieux si indisponible :
-   les Suggestions continuent de fonctionner sans grounding.
+   GROUNDING VIA LE CERVEAU MULTIVAC (RAG)  —  /v1/context
+   Remplace l'ancienne base muf-knowledge (dépôt GitHub privé).
+   On interroge l'endpoint RAG du Cerveau (POST {BRAIN_URL}/v1/context),
+   authentifié par le JWT Supabase (en-tête Authorization: Bearer …),
+   et on assemble les `chunks[].texte` retournés en un bloc de contexte
+   injecté dans le prompt Gemini. Le Cerveau « aide » Gemini : il fournit
+   des extraits de doc Multivac réels, il ne génère rien lui-même.
+   Repli gracieux : Cerveau injoignable / pas de token → bloc vide,
+   l'IA peut tourner sans grounding (avec un avertissement clair).
    ===================================================== */
-var KB_REPO    = 'nitroks14/muf-knowledge';
-var KB_BRANCH  = 'main';
-var KB_LS_PREFIX = 'muf_kb_';
 
-/* Description des familles : fichier source + clé de cache localStorage. */
-var KB_FAMILLES = {
-  C: { file: 'knowledge-serie-C.json', ls: KB_LS_PREFIX + 'serie_C' },
-  T: { file: 'knowledge-serie-T.json', ls: KB_LS_PREFIX + 'serie_T' },
-  R: { file: 'knowledge-serie-R.json', ls: KB_LS_PREFIX + 'serie_R' }
-};
+/* URL du Cerveau (sans slash final). Centralisée dans window.MUF_CONFIG
+   (js/config.js) ; constante locale de repli si la config n'a pas chargé. */
+var BRAIN_URL = (window.MUF_CONFIG && window.MUF_CONFIG.BRAIN_URL) ||
+                'https://vm-pc.tail1b2aa8.ts.net';
+
+/* Nombre de chunks demandés au RAG et budget de caractères du contexte
+   assemblé (équivalent fonctionnel de l'ancien plafond ~12000 car.). */
+var BRAIN_TOP_K       = 12;
+var BRAIN_CONTEXT_MAX = 12000;
 
 /* Normalise une chaîne pour un matching robuste (minuscule, sans accents). */
 function kbNorm(str) {
@@ -153,94 +156,95 @@ function kbNorm(str) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/* Mappe une machine (clé + label) vers une famille (C / T / R) ou null. */
-function detecterFamille(machineKey, machineLabel) {
-  var s = kbNorm(machineKey) + ' ' + kbNorm(machineLabel);
-  if (/cloche|serie c\b|serie-c\b/.test(s)) return 'C';
-  if (/operculeuse|traysealer|serie t\b|serie-t\b/.test(s)) return 'T';
-  if (/thermoform|serie r\b|serie-r\b/.test(s)) return 'R';
-  return null;
-}
-
-/* Lit le contenu en cache pour une famille (objet parsé) ou null. */
-function lireCacheConnaissances(fam) {
-  var desc = KB_FAMILLES[fam];
-  if (!desc) return null;
-  try {
-    var raw = localStorage.getItem(desc.ls);
-    return raw ? JSON.parse(raw) : null;
-  } catch (_) { return null; }
-}
-
-/* Fetch le fichier de connaissances d'une famille via l'API GitHub (dépôt privé).
-   Renvoie l'objet parsé, ou null en cas d'absence de PAT / erreur (repli). */
-async function fetchConnaissances(fam) {
-  var desc = KB_FAMILLES[fam];
-  if (!desc) return null;
-
-  var token = (typeof window._getGithubToken === 'function') ? window._getGithubToken() : '';
-  if (!token) { console.warn('[KB] Pas de PAT GitHub — grounding désactivé.'); return null; }
-
-  try {
-    var resp = await fetch(
-      'https://api.github.com/repos/' + KB_REPO + '/contents/' + desc.file + '?ref=' + KB_BRANCH,
-      { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.raw' } }
-    );
-    if (!resp.ok) { console.warn('[KB] Échec fetch ' + desc.file + ' (' + resp.status + ') — repli sans grounding.'); return null; }
-    var text = await resp.text();
-    var obj  = JSON.parse(text);
-    try { localStorage.setItem(desc.ls, text); } catch (_) {}
-    return obj;
-  } catch (e) {
-    console.warn('[KB] Erreur réseau/parse pour ' + desc.file + ' — repli sans grounding.', e);
-    return null;
+/* Interroge le Cerveau (POST {BRAIN_URL}/v1/context) avec le JWT Supabase.
+   @param {string} question  - requête en langage naturel pour le RAG
+   @param {object} contexte  - { type_machine?, generation?, options? }
+   @returns {Promise<object>} - réponse JSON du Cerveau ({ chunks, ... })
+   Lève une erreur explicite (pas de token, réseau, statut HTTP) : l'appelant
+   décide du repli. */
+async function interrogerCerveau(question, contexte) {
+  var token = (window.Auth && typeof window.Auth.getToken === 'function')
+    ? window.Auth.getToken()
+    : null;
+  if (!token) {
+    var e = new Error('Connexion Multivac requise pour interroger le Cerveau.');
+    e._needLogin = true;
+    throw e;
   }
-}
 
-/* Charge les connaissances de la famille active.
-   Stratégie : sert le cache immédiatement s'il existe (et rafraîchit en
-   arrière-plan, best-effort) ; sinon fetch synchrone. Repli → null. */
-async function chargerConnaissances(fam) {
-  if (!KB_FAMILLES[fam]) return null;
-  var cached = lireCacheConnaissances(fam);
-  if (cached) {
-    /* Rafraîchissement best-effort, sans bloquer ni propager d'erreur. */
-    fetchConnaissances(fam).catch(function () {});
-    return cached;
-  }
-  return await fetchConnaissances(fam);
-}
-
-/* Construit un bloc de contexte condensé à partir des entrées d'une famille.
-   Privilégie les domaines pertinents puis complète ; tronque à ~12000 car. */
-function construireContexteConnaissances(kb) {
-  if (!kb || !Array.isArray(kb.entries) || !kb.entries.length) return '';
-  var PRIORITAIRES = { structure: 1, maintenance: 1, lubrification: 1, process: 1 };
-  var entries = kb.entries.slice().sort(function (a, b) {
-    var pa = PRIORITAIRES[kbNorm(a.domaine)] ? 0 : 1;
-    var pb = PRIORITAIRES[kbNorm(b.domaine)] ? 0 : 1;
-    return pa - pb;
+  var resp = await fetch(BRAIN_URL + '/v1/context', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify({
+      question: question,
+      contexte: contexte || {},
+      options: { top_k: BRAIN_TOP_K, rerank: true, fulltext: true }
+    })
   });
 
-  var MAX = 12000;
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403) {
+      var ea = new Error('Session Multivac expirée — reconnectez-vous.');
+      ea._needLogin = true;
+      throw ea;
+    }
+    var msg = 'Cerveau indisponible (' + resp.status + ')';
+    try {
+      var errData = await resp.json();
+      if (errData && (errData.message || errData.error)) {
+        msg = errData.message || errData.error;
+      }
+    } catch (_) {}
+    throw new Error(msg);
+  }
+
+  return await resp.json();
+}
+
+/* Assemble les chunks renvoyés par le Cerveau en un bloc de contexte texte.
+   Remplace l'ancien construireContexteConnaissances : même contrat (chaîne
+   prête à injecter dans le prompt, plafonnée), à partir de chunks[].texte.
+   Trie par pertinence (rerank_score > score) et tronque au budget. */
+function assemblerContexteCerveau(reponse) {
+  if (!reponse || !Array.isArray(reponse.chunks) || !reponse.chunks.length) return '';
+
+  var chunks = reponse.chunks.slice().sort(function (a, b) {
+    var sa = (a.rerank_score != null) ? a.rerank_score : (a.score != null ? a.score : 0);
+    var sb = (b.rerank_score != null) ? b.rerank_score : (b.score != null ? b.score : 0);
+    return sb - sa;
+  });
+
   var lignes = [];
   var taille = 0;
-  for (var i = 0; i < entries.length; i++) {
-    var e = entries[i];
-    var parts = [];
-    if (e.sujet)   parts.push(e.sujet);
-    if (e.contenu) parts.push(e.contenu);
-    if (e.periodicite) parts.push('[périodicité : ' + e.periodicite + ']');
-    if (!parts.length) continue;
-    var prefixe = [];
-    if (e.station)   prefixe.push(e.station);
-    if (e.composant) prefixe.push(e.composant);
-    var entete = (e.domaine ? '(' + e.domaine + ') ' : '') + (prefixe.length ? prefixe.join(' › ') + ' — ' : '');
-    var ligne = '- ' + entete + parts.join(' : ');
-    if (taille + ligne.length > MAX) break;
+  for (var i = 0; i < chunks.length; i++) {
+    var c = chunks[i];
+    var texte = (c && c.texte ? String(c.texte) : '').trim();
+    if (!texte) continue;
+    /* Préfixe contextuel léger (type machine / génération) quand disponible. */
+    var meta = [];
+    if (c.type_machine) meta.push(c.type_machine);
+    if (c.generation)   meta.push(c.generation);
+    var entete = meta.length ? '(' + meta.join(' ') + ') ' : '';
+    var ligne = '- ' + entete + texte;
+    if (taille + ligne.length > BRAIN_CONTEXT_MAX) break;
     lignes.push(ligne);
     taille += ligne.length + 1;
   }
+
+  /* Entités liées (graphe) : ajoutées en fin de bloc si la place le permet. */
+  if (Array.isArray(reponse.entites_liees) && reponse.entites_liees.length) {
+    var ents = reponse.entites_liees
+      .map(function (en) { return en && en.libelle ? en.libelle : ''; })
+      .filter(Boolean);
+    if (ents.length) {
+      var ligneEnt = 'Entités liées : ' + ents.join(', ');
+      if (taille + ligneEnt.length <= BRAIN_CONTEXT_MAX) lignes.push(ligneEnt);
+    }
+  }
+
   return lignes.join('\n');
 }
 
@@ -460,6 +464,14 @@ document.getElementById('ia-btn-ortho').addEventListener('click', async function
    2. SUGGESTIONS CONTEXTUELLES
    ===================================================== */
 document.getElementById('ia-btn-suggestions').addEventListener('click', async function () {
+  /* Gating : le grounding via le Cerveau exige un JWT Supabase.
+     Sans session, on invite à se connecter plutôt que de lancer l'analyse. */
+  if (!estConnecte()) {
+    openModal('Suggestions pour la machine active');
+    showResults(messageConnexionRequise(), null);
+    return;
+  }
+
   openModal('Suggestions pour la machine active');
   try {
     var taxo = window._getTaxo();
@@ -470,22 +482,37 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
     }
     var machine = taxo[machineKey];
 
-    /* Grounding optionnel : connaissances Multivac de la famille active.
-       Repli silencieux si pas de PAT / fetch en échec / famille inconnue. */
+    /* Grounding via le Cerveau (RAG) : on formule une question pertinente pour
+       la machine active. Le ciblage machine repose UNIQUEMENT sur la recherche
+       sémantique (le nom de la machine est inclus dans la question) : on
+       n'envoie plus de filtre type_machine, inexploitable car chunks.type_machine
+       ne contient que des codes modèles (R535, T850…), jamais nos familles
+       C/T/R. Repli gracieux si le Cerveau est injoignable : l'IA continue sans
+       grounding (un avertissement est affiché). */
     var blocConnaissances = '';
+    var groundingIndispo = false;
     try {
-      var fam = detecterFamille(machineKey, machine.label);
-      if (fam) {
-        var kb = await chargerConnaissances(fam);
-        blocConnaissances = construireContexteConnaissances(kb);
+      var question = 'Maintenance préventive de la machine « ' + (machine.label || machineKey) +
+        ' » : éléments, composants, points de graissage, périodicités et actions ' +
+        'de contrôle/nettoyage recommandés par la documentation Multivac.';
+      var reponseCerveau = await interrogerCerveau(question, {});
+      blocConnaissances = assemblerContexteCerveau(reponseCerveau);
+    } catch (errBrain) {
+      if (errBrain && errBrain._needLogin) {
+        showResults(messageConnexionRequise(), null);
+        return;
       }
-    } catch (_) { blocConnaissances = ''; }
+      /* Cerveau injoignable : on continue sans grounding (dernier recours). */
+      groundingIndispo = true;
+      console.warn('[Cerveau] Grounding indisponible — suggestions sans contexte.', errBrain);
+    }
 
     var groundingPrompt = '';
     if (blocConnaissances) {
       groundingPrompt =
-        'CONNAISSANCES MULTIVAC DE RÉFÉRENCE (issues des notices officielles, à utiliser ' +
-        'en priorité pour des suggestions réalistes et spécifiques à cette machine) :\n' +
+        'CONNAISSANCES MULTIVAC DE RÉFÉRENCE (extraits de la documentation officielle ' +
+        'fournis par le Cerveau Multivac, à utiliser en priorité pour des suggestions ' +
+        'réalistes et spécifiques à cette machine) :\n' +
         blocConnaissances + '\n\n' +
         'Base tes suggestions en PRIORITÉ sur ces connaissances Multivac réelles ET sur la ' +
         'taxonomie existante. Propose des éléments/actions cohérents avec la doc (composants, ' +
@@ -510,7 +537,13 @@ document.getElementById('ia-btn-suggestions').addEventListener('click', async fu
       return;
     }
 
-    var html = '<p class="ia-count">' + suggestions.length + ' suggestion(s) pour <strong>' + esc(machine.label) + '</strong> :</p>' +
+    var avertGrounding = groundingIndispo
+      ? '<p class="ia-error" style="margin-bottom:8px;">⚠️ Connaissances Multivac indisponibles ' +
+        '(Cerveau injoignable) — suggestions générées sans grounding.</p>'
+      : '';
+
+    var html = avertGrounding +
+      '<p class="ia-count">' + suggestions.length + ' suggestion(s) pour <strong>' + esc(machine.label) + '</strong> :</p>' +
       toggleAllButtonHtml() +
       '<div class="ia-suggestions">' +
       suggestions.map(function (s, i) {
@@ -853,6 +886,35 @@ window.IA.setModel = function (val) {
    ===================================================== */
 function esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* Vrai si une session Supabase est active (JWT disponible pour le Cerveau). */
+function estConnecte() {
+  return !!(window.Auth && typeof window.Auth.isAuthenticated === 'function' &&
+            window.Auth.isAuthenticated());
+}
+
+/* Bloc HTML invitant à se connecter (affiché dans la modale IA quand une
+   action nécessitant le Cerveau est lancée hors session). Le bouton ouvre la
+   sidebar de connexion via l'API exposée par js/login-ui.js. */
+function messageConnexionRequise() {
+  setTimeout(function () {
+    var btn = document.getElementById('ia-need-login-btn');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        closeModal();
+        if (window.MUF_LOGIN && typeof window.MUF_LOGIN.demanderConnexion === 'function') {
+          window.MUF_LOGIN.demanderConnexion();
+        }
+      });
+    }
+  }, 0);
+  return '<p class="ia-error">🔒 Cette fonction interroge le Cerveau Multivac et nécessite ' +
+    'd\'être connecté.</p>' +
+    '<button type="button" id="ia-need-login-btn" ' +
+    'style="margin-top:10px;padding:9px 14px;background:var(--color-primary);color:#fff;' +
+    'border:none;border-radius:var(--radius);cursor:pointer;font-size:var(--font-size-sm);' +
+    'font-weight:600;font-family:inherit;">Se connecter à Multivac</button>';
 }
 
 function showToastIA(msg, type) {

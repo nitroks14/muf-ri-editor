@@ -560,6 +560,40 @@
 
 <!-- Sidebar config GitHub -->
 <div class="te-sidebar" id="te-sidebar">
+
+  <!-- Compte Multivac (Supabase) — fournit le JWT pour le Cerveau (IA) -->
+  <div class="ia-key-section">
+    <span class="ia-key-label">🔐 Compte Multivac</span>
+
+    <!-- État déconnecté : formulaire de connexion -->
+    <div id="auth-form-wrap">
+      <form id="auth-login-form" autocomplete="off">
+        <div class="te-field">
+          <label>Email</label>
+          <input type="email" id="auth-email" placeholder="prenom.nom@multivac.fr" autocomplete="username" />
+        </div>
+        <div class="te-field">
+          <label>Mot de passe</label>
+          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <p class="auth-error" id="auth-error" style="display:none;color:#b91c1c;font-size:var(--font-size-xs);margin:0 0 8px;"></p>
+        <button type="submit" class="te-btn-save-config" id="auth-login-btn" style="width:100%;">Se connecter</button>
+        <p class="te-field-hint" style="margin-top:8px;">Nécessaire pour les suggestions IA (le Cerveau Multivac). Même compte que MUF-WebApp (@multivac.fr).</p>
+      </form>
+    </div>
+
+    <!-- État connecté : email + déconnexion -->
+    <div id="auth-status" style="display:none;">
+      <div class="gh-auth-status" style="margin-top:4px;">
+        <span class="gh-auth-dot" style="background:#16a34a;"></span>
+        <span id="auth-status-email"></span>
+      </div>
+      <button type="button" class="te-btn-forget" id="auth-logout-btn" style="margin-top:8px;">Se déconnecter</button>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;" />
+
   <div class="te-sidebar-title">Config GitHub</div>
 
   <!-- Token GitHub (PAT) -->
@@ -746,7 +780,15 @@
 <!-- Plugins Blockly vendorisés (offline). Chargés APRÈS blockly.min.js : ils s'attachent à window.Blockly / window. -->
 <script src="libs/minimap.umd.js"></script>
 <script src="libs/backpack.umd.js"></script>
+<!-- Supabase (auth + JWT pour le Cerveau). Ordre impératif :
+     config → lib vendorisée → client partagé → module Auth.
+     Doivent précéder ia.js (grounding Cerveau) et login-ui.js. -->
+<script src="js/config.js"></script>
+<script src="libs/supabase.umd.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/app.js"></script>
 <script src="js/ia.js"></script>
+<script src="js/login-ui.js"></script>
 </body>
 </html>
